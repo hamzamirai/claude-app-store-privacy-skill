@@ -1,3 +1,5 @@
+![App Privacy Skill Hero](assets/hero.png)
+
 # App Privacy & Age Rating Skill for Claude Code
 
 Automatically scan your Apple platform Xcode project and generate complete App Store Privacy Details, Age Rating answers, AI Privacy disclosures, compliance findings, and a professional `.docx` report — all from your codebase.
