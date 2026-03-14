@@ -1,6 +1,6 @@
 ---
 name: app-privacy
-description: Scan SwiftUI/iOS codebases to detect privacy-relevant SDKs, frameworks, AI APIs (Apple Intelligence, OpenAI, Gemini, Claude/Anthropic, Mistral), and data collection patterns. Generates App Store Privacy Details, Age Rating answers, PrivacyInfo.xcprivacy per platform target, AI-PRIVACY-DISCLOSURE.md for §5.1.2(i) compliance, App Store compliance findings, and a professional .docx report saved to Docs/
+description: Scan SwiftUI/iOS codebases to detect privacy-relevant SDKs, frameworks, AI APIs (Apple Intelligence, OpenAI, Gemini, Claude/Anthropic, Mistral), and data collection patterns. Generates App Store Privacy Details, Age Rating answers, PrivacyInfo.xcprivacy per platform target, AI-PRIVACY-DISCLOSURE.md for §5.1.2(i) compliance, App Store compliance findings, and a professional .docx report (or Markdown, or both — user's choice) saved to Docs/
 ---
 
 # App Privacy & Age Rating Skill
@@ -25,7 +25,7 @@ Activate this skill when the user says any of:
 
 ## Execution Flow
 
-Follow these 10 phases in order. Do NOT skip phases.
+Follow these 11 phases in order. Do NOT skip phases.
 
 ---
 
@@ -565,7 +565,7 @@ Generate a `PrivacyInfo.xcprivacy` file for **each platform target** detected in
 1. **Identify all targets** from the Xcode project (e.g., `MyApp` for iOS, `MyApp Watch App` for watchOS, `MyApp Mac` for macOS)
 2. **Generate a separate `PrivacyInfo.xcprivacy`** per target, because each platform target may:
    - Use different SDKs (e.g., AdMob on iOS but not on watchOS)
-   - Access different APIs (e.g., HealthKit on watchOS, ARKit on visionOS)
+   - Access different APIs (e.g., HealthKit on watchOS and visionOS, ARKit on visionOS)
    - Have different data collection patterns due to `#if os()` conditional compilation
 3. **Place each file** in the corresponding target directory:
    - `MyApp/PrivacyInfo.xcprivacy` (iOS/iPadOS)
@@ -1125,6 +1125,23 @@ Include a **Compliance Findings** section in the report with this table:
 
 ---
 
+### Phase 9.5: Output Format Choice
+
+Before generating the final report, ask the user:
+
+> **"How would you like the report delivered?"**
+> - **A) `.docx` only** — Professional Word document (requires `npm install -g docx`)
+> - **B) `.md` only** — Markdown report (no dependencies)
+> - **C) Both** — `.docx` + `Docs/APP-PRIVACY-REPORT.md` (default recommendation)
+>
+> *(If no answer or default accepted, generate both.)*
+
+Store the choice and branch Phase 10 accordingly:
+- Choice A or C → run Phase 10 docx generation
+- Choice B or C → write `Docs/APP-PRIVACY-REPORT.md` (8-section structure: Executive Summary, Detected SDKs & Frameworks, Privacy Declaration, Required Reason APIs, Per-Target Declaration Summary, App Store Connect Checklist, Age Rating, v2/Future Notes)
+
+---
+
 ### Phase 10: Document Generation (.docx Report)
 
 After generating the `PrivacyInfo.xcprivacy` and completing the Age Rating analysis, create a professional `.docx` document containing the complete report. This is the **primary output** of the skill.
@@ -1220,15 +1237,58 @@ The document has the following structure:
 
 #### How to Generate
 
-Use the `docx` skill's `docx-js` approach:
+Use the battle-tested `docx-js` pattern below. Follow every step exactly.
 
-1. Create a Node.js script that uses the `docx` package to build the document programmatically
-2. Populate it with all the data gathered in Phases 1-9
-3. Ensure the `Docs/` directory exists: `mkdir -p Docs/`
-4. Save as `Docs/APP-PRIVACY-AND-AGE-RATING-REPORT.docx`
-5. Validate the output: `python scripts/office/validate.py Docs/APP-PRIVACY-AND-AGE-RATING-REPORT.docx` (if validator available)
+**Step 1 — Install docx npm package**
 
-If the docx skill is not available, fall back to generating the markdown report only and inform the user that the `.docx` output requires the docx skill to be installed.
+```bash
+npm install -g docx 2>&1 | tail -3
+```
+
+**Step 2 — Resolve NODE_PATH (global modules may not be on the default path)**
+
+```bash
+NODE_PATH=$(npm root -g)
+```
+
+**Step 3 — Write the generation script to `/tmp/gen_privacy_report.js`**
+
+Use the Write tool to create the Node.js script. The script must:
+- Require docx from the resolved NODE_PATH: `require('${NODE_PATH}/docx')` (template literal evaluated at runtime)
+- Use US Letter page size: `width: 12240, height: 15840` (DXA units)
+- Set 1" margins: `top: 1440, right: 1440, bottom: 1440, left: 1440`
+- Use `LevelFormat.BULLET` for checkbox and bullet lists (never unicode bullets inline)
+- Use `ShadingType.CLEAR` for table cell shading (never `SOLID` — breaks rendering)
+- Set dual widths on all tables: `columnWidths` array on the table + cell-level `width` (both must sum correctly to total table width)
+- Use `WidthType.DXA` exclusively for all widths (never `PERCENTAGE` — breaks Google Docs)
+- Include branded header (report title + date) and footer (page numbers)
+- Ensure `Docs/` directory exists before writing: `fs.mkdirSync('Docs', { recursive: true })`
+- Write output to `Docs/APP-PRIVACY-AND-AGE-RATING-REPORT.docx`
+- Exit with code 1 on any error (`process.exit(1)`)
+
+**Step 4 — Run the script**
+
+```bash
+NODE_PATH=$(npm root -g) node /tmp/gen_privacy_report.js
+```
+
+**Step 5 — Validate (if validator available)**
+
+Check for validator in this order:
+1. `~/.claude/skills/docx/scripts/office/validate.py` (global docx skill install)
+2. `scripts/office/validate.py` (local copy in skill dir)
+
+```bash
+python3 ~/.claude/skills/docx/scripts/office/validate.py \
+  Docs/APP-PRIVACY-AND-AGE-RATING-REPORT.docx
+```
+
+If the validator is not found at either path, skip silently and note: "Validation skipped — validate.py not found."
+
+**Fallback (if docx install fails)**
+
+If `npm install -g docx` fails, fall back to `.md` only and inform the user:
+> "Could not install the `docx` npm package. Generating markdown report only. To get the `.docx` report, run `npm install -g docx` and re-run the skill."
 
 ---
 
