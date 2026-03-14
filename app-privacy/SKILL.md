@@ -1,6 +1,6 @@
 ---
 name: app-privacy
-description: Scan SwiftUI/iOS codebases to detect privacy-relevant SDKs, frameworks, and data collection patterns, then generate accurate Apple App Store Privacy Details declarations, Age Rating questionnaire answers, App Store Connect-ready checklists, PrivacyInfo.xcprivacy files, and a professional .docx report document
+description: Scan SwiftUI/iOS codebases to detect privacy-relevant SDKs, frameworks, AI APIs (Apple Intelligence, OpenAI, Gemini, Claude/Anthropic, Mistral), and data collection patterns. Generates App Store Privacy Details, Age Rating answers, PrivacyInfo.xcprivacy per platform target, AI-PRIVACY-DISCLOSURE.md for §5.1.2(i) compliance, App Store compliance findings, and a professional .docx report saved to Docs/
 ---
 
 # App Privacy & Age Rating Skill
@@ -25,7 +25,7 @@ Activate this skill when the user says any of:
 
 ## Execution Flow
 
-Follow these 8 phases in order. Do NOT skip phases.
+Follow these 10 phases in order. Do NOT skip phases.
 
 ---
 
@@ -109,6 +109,38 @@ import Singular
 import Kochava
 import TelemetryDeck
 import PostHog
+```
+
+#### AI & Machine Learning SDKs
+
+Also grep for AI/ML SDK imports:
+
+```
+import FoundationModels
+import OpenAI
+import OpenAIKit
+import OpenAISwift
+import GoogleGenerativeAI
+import FirebaseAI
+import Anthropic
+import AIProxy
+import CoreML
+import CreateML
+import NaturalLanguage
+import SoundAnalysis
+```
+
+Also grep for AI provider endpoint strings in any `.swift` file:
+```
+api.openai.com
+generativelanguage.googleapis.com
+api.anthropic.com
+api.mistral.ai
+api.groq.com
+api.cohere.com
+api.perplexity.ai
+aiplatform.googleapis.com
+firebaseai.googleapis.com
 ```
 
 2. **Record** every unique import found with the file path where it was detected.
@@ -233,6 +265,28 @@ import PostHog
 |---------|-------------|
 | `TVUserManager` | Multi-user profile management |
 | `TVTopShelfContentProvider` | Top Shelf content (may use user data) |
+
+#### AI & Machine Learning (All Platforms)
+| Pattern | Implication | Provider |
+|---------|-------------|----------|
+| `LanguageModelSession()` | On-device foundation model | Apple Intelligence |
+| `LanguageModel.default` | On-device LLM inference | Apple Intelligence |
+| `WritingToolsBehavior` | Writing Tools integration | Apple Intelligence |
+| `ImageCreator` | On-device image generation | Apple Intelligence |
+| `ImagePlaygroundViewController` | Image Playground UI | Apple Intelligence |
+| `OpenAI(apiKey:` | OpenAI client initialization — prompts sent to OpenAI | OpenAI |
+| `ChatQuery(` | OpenAI chat request — user messages sent to OpenAI | OpenAI |
+| `GenerativeModel(` | Gemini model instantiation — prompts sent to Google | Google Gemini |
+| `model.generateContent(` | Gemini content generation request | Google Gemini |
+| `client.messages.create` | Anthropic Claude API call — prompts sent to Anthropic | Claude (Anthropic) |
+| `Anthropic(apiKey:` | Anthropic client initialization | Claude (Anthropic) |
+| `"api.openai.com"` | Direct OpenAI API endpoint usage | OpenAI |
+| `"generativelanguage.googleapis.com"` | Direct Gemini API endpoint | Google Gemini |
+| `"api.anthropic.com"` | Direct Claude API endpoint | Claude (Anthropic) |
+| `MLModel(` | CoreML model inference | On-device ML |
+| `NLModel(` | Natural Language ML model | On-device ML |
+| `"api.mistral.ai"` | Mistral AI API endpoint | Mistral |
+| `"api.groq.com"` | Groq API endpoint | Groq |
 
 #### Data Storage (Context-dependent)
 | Pattern | Implication |
@@ -415,6 +469,62 @@ Apply the following knowledge base to map each detected SDK/framework to Apple's
 | Data Type | Linked | Tracking | Purpose |
 |-----------|--------|----------|---------|
 | Device ID | Yes | No | App Functionality |
+
+#### OpenAI API (ChatGPT / GPT-4 / GPT-4o)
+| Data Type | Linked | Tracking | Purpose | Notes |
+|-----------|--------|----------|---------|-------|
+| User Content (prompts/messages) | ASK | No | App Functionality | Sent to OpenAI servers; retained up to 30 days |
+| Other Data Types (AI-generated responses) | No | No | App Functionality | — |
+
+> **OpenAI data policy**: API inputs/outputs are NOT used for model training by default (API users are opted out). Data is retained for up to 30 days for abuse/safety monitoring. Zero-retention (0-day) available via enterprise agreement. Always ask user: "Do prompts contain any user-identifiable information (name, email, health data, location)?"
+
+#### Google Gemini API (Generative Language / Firebase AI)
+| Data Type | Linked | Tracking | Purpose | Notes |
+|-----------|--------|----------|---------|-------|
+| User Content (prompts/messages) | ASK | No | App Functionality | Sent to Google servers |
+| Other Data Types (AI-generated responses) | No | No | App Functionality | — |
+
+> **Gemini data policy**:
+> - **Free tier (AI Studio / free quota)**: Google MAY use prompts and responses to improve models. Human reviewers may read content (de-linked from account). MUST disclose this to users.
+> - **Paid tier**: NOT used for training. Retained for limited period for abuse detection only.
+> - Grounding with Google Search: data retained 30 days; Maps grounding: up to 90 days.
+> Always ask user: "Are you on the free or paid Gemini API tier?"
+
+#### Anthropic Claude API
+| Data Type | Linked | Tracking | Purpose | Notes |
+|-----------|--------|----------|---------|-------|
+| User Content (prompts/messages) | ASK | No | App Functionality | Sent to Anthropic servers; retained up to 30 days |
+| Other Data Types (AI-generated responses) | No | No | App Functionality | — |
+
+> **Anthropic data policy**: API inputs/outputs are deleted within 30 days by default. May be used for model training UNLESS the developer has opted out (via API settings or enterprise agreement). Safety-flagged content may be retained up to 2 years. Always ask user: "Have you opted out of Anthropic training on your API account?" and "Do prompts contain user-identifiable data?"
+
+#### Apple Intelligence — Foundation Models (On-Device)
+| Data Type | Linked | Tracking | Purpose | Notes |
+|-----------|--------|----------|---------|-------|
+| User Content (prompts) | No | No | App Functionality | Processed fully on-device; no data sent to Apple |
+
+> **Apple Intelligence data policy**: `FoundationModels` framework processes all requests on-device. No data leaves the device. No disclosure required for on-device processing (same as on-device CoreML). EXCEPTION: If Private Cloud Compute (PCC) is used for overflow, Apple's privacy guarantees apply but disclosure in privacy policy is recommended.
+
+#### Apple Intelligence — ChatGPT Extension (Opt-in)
+| Data Type | Linked | Tracking | Purpose | Notes |
+|-----------|--------|----------|---------|-------|
+| User Content (prompts routed to ChatGPT) | No | No | App Functionality | Sent to OpenAI only after explicit user opt-in per request |
+
+> **ChatGPT extension policy**: Apple routes requests to OpenAI only with explicit per-request user consent (shown in system UI). OpenAI's privacy policy applies. IP addresses are obscured by Apple. Declare as third-party AI data sharing per §5.1.2(i).
+
+#### Apple Intelligence — Writing Tools / Image Playground / Visual Intelligence
+| Data Type | Linked | Tracking | Purpose | Notes |
+|-----------|--------|----------|---------|-------|
+| User Content | No | No | App Functionality | Entirely on-device processing |
+
+> No privacy declarations needed — Apple handles these features. Apps that adopt `WritingToolsBehavior` or `ImagePlaygroundViewController` do not send data to Apple.
+
+#### Mistral / Groq / Cohere / Perplexity (Third-Party LLM APIs)
+| Data Type | Linked | Tracking | Purpose | Notes |
+|-----------|--------|----------|---------|-------|
+| User Content (prompts/messages) | ASK | No | App Functionality | Sent to third-party AI server |
+
+> Treat any third-party LLM API the same as OpenAI: declare User Content as collected data, disclose the provider, obtain explicit user consent. Check each provider's specific data retention and training policies.
 
 ---
 
@@ -657,7 +767,365 @@ Include in the report:
 
 ---
 
-### Phase 8: Document Generation (.docx Report)
+### Phase 8: AI Privacy Disclosure
+
+If ANY AI SDK or endpoint was detected in Phases 2 or 3, generate a complete **AI Data Practices** section and a standalone `Docs/AI-PRIVACY-DISCLOSURE.md` file.
+
+#### 8.0 — AI Provider Detection Summary
+
+Build a table of all AI providers found:
+
+| Provider | SDK / Pattern Detected | Processing Location | Data Sent | Trains on Data | Retention |
+|----------|----------------------|-------------------|-----------|----------------|-----------|
+| Apple Intelligence (Foundation Models) | `LanguageModelSession` | On-device | Nothing | No | N/A |
+| Apple Intelligence + ChatGPT extension | `ImagePlaygroundViewController` + ChatGPT route | On-device + OpenAI (opt-in) | Prompts (user-consented only) | No (OpenAI API policy) | 30 days (OpenAI) |
+| OpenAI (GPT-4 / GPT-4o) | `OpenAI(apiKey:` / `api.openai.com` | OpenAI servers (US) | Prompts + context | No (API default) | 30 days |
+| Google Gemini (free tier) | `GenerativeModel(` / `generativelanguage.googleapis.com` | Google servers | Prompts + responses | **YES** (free tier) | Unspecified |
+| Google Gemini via Firebase AI | `import FirebaseAI` / `firebaseai.googleapis.com` | Google servers | Prompts + responses | No (paid/Firebase tier) | Limited (abuse detection) |
+| Anthropic Claude | `Anthropic(apiKey:` / `api.anthropic.com` | Anthropic servers (US) | Prompts + responses | Opt-out available | 30 days |
+| Mistral / Groq / Cohere / Other | URL endpoint strings | Third-party servers | Prompts + responses | Check provider | Check provider |
+| CoreML / NaturalLanguage (on-device) | `MLModel(` / `NLModel(` | On-device | Nothing | No | N/A |
+
+> Only include rows for providers actually detected. Ask user to confirm free vs paid tier for Gemini.
+
+#### 8.1 — AI Disambiguation Questions
+
+Ask the user the following before generating disclosures:
+
+1. **Data sensitivity**: "What types of user data are included in AI prompts? (e.g. only text the user types, or also name/email/health data/location?)"
+2. **Gemini tier** (if detected): "Is this app using the free Gemini API tier (AI Studio) or Firebase AI (formerly Vertex AI for Firebase / paid tier)?"
+3. **Anthropic training opt-out** (if Claude detected): "Have you opted out of Anthropic using your API data for model training in your Anthropic account settings?"
+4. **OpenAI zero-retention** (if OpenAI detected): "Do you have an OpenAI enterprise agreement with zero data retention?"
+5. **User consent flow**: "Does the app show users a disclosure before their first AI interaction explaining that prompts are sent to [provider]?"
+
+#### 8.2 — App Store Connect AI Declarations (§5.1.2(i))
+
+Per **§5.1.2(i)**: "You must clearly disclose where personal data will be shared with third parties, **including with third-party AI**, and obtain explicit permission before doing so."
+
+For each cloud AI provider detected, declare in App Store Connect:
+
+| Provider | Data Type to Declare | NSPrivacyCollectedDataType Constant | Linked | Tracking | Purpose |
+|----------|---------------------|-------------------------------------|--------|----------|---------|
+| OpenAI | User Content (prompts) | `NSPrivacyCollectedDataTypeOtherUserContent` | ASK | No | App Functionality |
+| OpenAI | Other Data (AI responses cached/stored) | `NSPrivacyCollectedDataTypeOtherDataTypes` | No | No | App Functionality |
+| Google Gemini (free tier) | User Content | `NSPrivacyCollectedDataTypeOtherUserContent` | No | No | App Functionality |
+| Google Gemini (free tier) | Product Interaction (used for training) | `NSPrivacyCollectedDataTypeProductInteraction` | No | No | Analytics |
+| Anthropic Claude | User Content | `NSPrivacyCollectedDataTypeOtherUserContent` | ASK | No | App Functionality |
+| Any cloud AI + user-identifiable prompts | Name, Email, Health Data, etc. | (relevant constant) | Yes | No | App Functionality |
+
+> **Apple Intelligence (on-device only)**: No App Store Connect declaration needed. Processing never leaves the device.
+
+#### 8.3 — NSPrivacyAccessedAPITypes additions for AI
+
+If AI features use UserDefaults (to store conversation history, AI preferences, model selection), ensure `NSPrivacyAccessedAPICategoryUserDefaults` with reason `CA92.1` is in the `PrivacyInfo.xcprivacy`.
+
+#### 8.4 — Required In-App AI Disclosures
+
+Generate the recommended user-facing disclosure text for each provider. This text must appear in the app's **Privacy Policy** and optionally as an **in-app disclosure** shown before the first AI interaction.
+
+---
+
+**Apple Intelligence (Foundation Models)**
+```
+This app uses Apple Intelligence, which processes your requests using an
+on-device AI model. Your data never leaves your device.
+```
+
+---
+
+**OpenAI (GPT-4 / GPT-4o)**
+```
+This app uses OpenAI's GPT models to [describe feature, e.g. "generate
+responses"]. When you use [feature name], your messages are sent to OpenAI's
+servers and processed in the United States. OpenAI retains API data for up
+to 30 days for safety monitoring. Your data is not used to train OpenAI's
+models. For more information, see OpenAI's Privacy Policy at openai.com/privacy.
+```
+
+---
+
+**Google Gemini (Free Tier)**
+```
+This app uses Google Gemini to [describe feature]. When you use [feature name],
+your messages are sent to Google's servers. Google may use this data to improve
+its AI models and services. Human reviewers at Google may read content in
+de-identified form. For more information, see Google's Privacy Policy.
+
+[WARN: Free tier requires prominent disclosure — consider upgrading to paid tier
+to eliminate training data concerns.]
+```
+
+---
+
+**Google Gemini (Paid Tier)**
+```
+This app uses Google Gemini to [describe feature]. When you use [feature name],
+your messages are sent to Google's servers. Google does not use API data to
+train its models. Data is retained for a limited period for safety monitoring only.
+```
+
+---
+
+**Anthropic Claude**
+```
+This app uses Anthropic's Claude AI to [describe feature]. When you use
+[feature name], your messages are sent to Anthropic's servers and processed
+in the United States. Anthropic retains data for up to 30 days. [If opted out:
+Your data is not used to train Claude's models.] For more information, see
+Anthropic's Privacy Policy at anthropic.com/privacy.
+```
+
+---
+
+**Apple Intelligence + ChatGPT Extension (opt-in)**
+```
+Some features use Apple Intelligence, which processes your requests on-device.
+When you choose to use ChatGPT-enhanced features, your request is sent to
+OpenAI. Apple obscures your IP address before sending. You will always be asked
+before any data is sent to ChatGPT.
+```
+
+---
+
+#### 8.5 — AI Privacy Compliance Checks
+
+| Check | Guideline | Status | Finding |
+|-------|-----------|--------|---------|
+| Third-party AI disclosure in app/privacy policy | §5.1.2(i) | 🚨/✅ | "Prompts sent to [provider] — must disclose" |
+| User consent before first AI use | §5.1.2(i) | 🚨/✅ | "Explicit consent required before sending data to AI" |
+| Gemini free tier training disclosure | §5.1.2(i) | ⚠️/✅ | "Free tier may train on data — disclose or upgrade" |
+| HealthKit / sensitive data in AI prompts | §5.1.2(vi) | 🚨/✅ | "Sensitive data in prompts may not go to third-party AI without consent" |
+| Age rating for AI chatbot features | §4.7 / §4.7.5 | ⚠️/✅ | "Chatbot features require age restriction mechanisms" |
+| AI content moderation for UGC | §4.7.1 | ⚠️/✅ | "AI-powered UGC requires content filtering and abuse reporting" |
+
+#### 8.6 — Generate AI-PRIVACY-DISCLOSURE.md
+
+##### Step 1 — Detect App Theme & Branding
+
+Before asking the user, scan the codebase for visual identity:
+
+1. **Accent color** — Grep `Assets.xcassets` for a `AccentColor.colorset` or `AppTint.colorset`. Read the `.colorset`'s `Contents.json` to extract the hex/rgb value.
+2. **Brand colors** — Grep for `Color(hex:`, `UIColor(red:`, `Color("`, or any `extension Color` / `extension ShapeStyle` defining custom app colors. Note the top 2–3 values used most frequently.
+3. **App name** — Read from `Info.plist` (`CFBundleDisplayName` or `CFBundleName`) or from the Xcode project target name.
+4. **App icon** — Check `Assets.xcassets/AppIcon.appiconset/` for the largest available icon file.
+5. **Design style** — Grep for `.rounded`, `.ultraThinMaterial`, SF Symbol usage, `GradientBackground`, and note whether the app uses a **light/minimalist**, **dark**, or **colorful/vibrant** design language.
+
+Build a theme profile:
+```
+App Name:       [name]
+Primary Color:  #[hex] (or "system default" if not found)
+Secondary Color: #[hex] (or none)
+Design Style:   Light / Dark / Vibrant / Minimal
+Icon:           [path or N/A]
+```
+
+##### Step 2 — Ask User
+
+> "I detected the following AI providers in your app: **[list providers]**.
+>
+> I also detected your app's branding:
+> - App name: **[App Name]**
+> - Primary color: **[#hex or "system accent"]**
+> - Design style: **[Light / Dark / Vibrant]**
+>
+> Would you like me to generate a beautifully styled `AI-PRIVACY-DISCLOSURE.md` using your app's theme? It will include:
+> - In-app disclosure text per AI feature (copy-paste ready)
+> - Privacy policy language per provider
+> - App Store Connect declarations checklist
+> - Compliance status per §5.1.2(i)
+>
+> Reply **Yes** to generate with your app's branding, or **No** to skip."
+
+Only generate if the user confirms **Yes**.
+
+##### Step 3 — Generate with App Theme
+
+Use the **`canvas-design` skill** to generate a beautifully designed PDF version at `Docs/AI-PRIVACY-DISCLOSURE.pdf`, styled with the detected app colors, app name, and icon. Then also generate the plain `Docs/AI-PRIVACY-DISCLOSURE.md` as a developer-readable copy.
+
+Apply the detected theme to the canvas-design PDF:
+- **Header**: App icon + App name + "AI Data Practices" subtitle, using primary brand color
+- **Section headers**: Primary accent color
+- **Tables**: Light/dark tinted rows matching the app's design style
+- **Footer**: "Generated by App Privacy Skill · [date]" in secondary color or gray
+- **Typography**: SF Pro Display for headings (or system equivalent), clean readable body
+
+If `canvas-design` skill is not available, generate `Docs/AI-PRIVACY-DISCLOSURE.md` only (plain markdown), with a comment block at the top noting the detected app theme:
+
+```markdown
+<!-- App Theme: [App Name] | Primary: #[hex] | Style: [Light/Dark/Vibrant] -->
+```
+
+Create `Docs/AI-PRIVACY-DISCLOSURE.md` with the following structure:
+
+```markdown
+# AI Data Practices — [App Name]
+Generated: [date]
+
+## AI Features Overview
+
+| Feature | AI Provider | Processing Location | User Data Sent |
+|---------|------------|-------------------|----------------|
+| [feature] | [provider] | On-device / Cloud | [data types] |
+
+## Provider-by-Provider Data Practices
+
+### [Provider Name]
+- **Data sent**: [description]
+- **Server location**: [country/region]
+- **Trains on your data**: Yes / No / Opt-out available
+- **Retention period**: [X days / limited / none]
+- **Zero retention available**: Yes / No
+- **Apple §5.1.2(i) disclosure required**: Yes / No
+
+## App Store Connect Declarations Required
+[table from 8.2]
+
+## Recommended Privacy Policy Language
+[generated text from 8.4]
+
+## Recommended In-App Disclosure
+[short consent text to show users before first AI use]
+
+## Compliance Status
+[table from 8.5]
+```
+
+---
+
+### Phase 9: App Store Compliance Checks
+
+After Age Rating analysis and before generating the report, run these submission compliance checks. These are derived from Apple Review Guidelines and flag critical rejection risks found in greenlight-style scanning.
+
+#### 8a — ATT Cross-Check (§5.1.2)
+
+If **any** of these were detected in Phase 2 or 3:
+- `GoogleMobileAds`, `GADBannerView`, `GADInterstitialAd`, `GADRewardedAd`
+- `FacebookCore`, `FBSDKCoreKit`
+- `AdSupport`, `ASIdentifierManager`, `advertisingIdentifier`
+- `Adjust`, `AppsFlyer`, `Branch`, `Singular`, `Kochava`
+
+Then **verify ATT is implemented** by grepping for:
+- `ATTrackingManager.requestTrackingAuthorization`
+- `import AppTrackingTransparency`
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Tracking SDK found + ATT missing | **CRITICAL** | App will be rejected — ATT is mandatory for tracking (§5.1.2) |
+| Tracking SDK found + ATT present | ✅ PASS | ATT correctly implemented |
+| No tracking SDK | ✅ N/A | ATT not required |
+
+#### 8b — Info.plist Purpose String Quality (§5.1.1)
+
+Grep for all `NSUsageDescription` keys in `Info.plist` files. Flag any string that:
+- Is empty or missing when a permission is requested
+- Is generic: "Used by the app", "Required", "Camera needed", "Location access", "For app functionality"
+- Does not mention the specific feature that uses the data
+
+| Severity | Example |
+|----------|---------|
+| **CRITICAL** | Key exists but value is empty |
+| **WARN** | Value is vague — "Camera needed" |
+| **INFO** | Value could be more specific |
+
+**Expected keys to check against detected permissions:**
+- `NSCameraUsageDescription` — if `AVCaptureSession` or `AVCaptureDevice` detected
+- `NSMicrophoneUsageDescription` — if `AVAudioSession` or `AVCaptureDevice` for audio
+- `NSPhotoLibraryUsageDescription` — if `PHPhotoLibrary` or `PHPickerViewController`
+- `NSLocationWhenInUseUsageDescription` — if `CLLocationManager`
+- `NSLocationAlwaysAndWhenInUseUsageDescription` — if `requestAlwaysAuthorization`
+- `NSContactsUsageDescription` — if `CNContactStore`
+- `NSHealthShareUsageDescription` — if `HKHealthStore`
+- `NSHealthUpdateUsageDescription` — if `HKHealthStore` with write access
+- `NSMotionUsageDescription` — if `CMMotionManager`
+- `NSSpeechRecognitionUsageDescription` — if `SFSpeechRecognizer`
+- `NSFaceIDUsageDescription` — if `LocalAuthentication`
+
+#### 8c — Account Deletion Check (§5.1.1)
+
+If **any account creation** was detected (email sign-up, Google Sign In, Apple Sign In, Firebase Auth), then grep for account deletion:
+- `deleteUser()`, `delete(completion:)` on Firebase Auth user
+- Strings: `"delete account"`, `"deleteAccount"`, `"Delete Account"` in localizable strings or Swift code
+- Navigation to a settings/account deletion screen
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Auth detected + no deletion found | **WARN** | Account deletion is required by §5.1.1. Add a "Delete Account" option in settings. |
+| Auth detected + deletion found | ✅ PASS | Account deletion is implemented |
+| No auth detected | ✅ N/A | Not required |
+
+#### 8d — Restore Purchases Check (§3.1.1)
+
+If **StoreKit** (`SKPaymentQueue`, `Product.products`, `Transaction.currentEntitlements`) was detected, grep for restore purchases:
+- `SKPaymentQueue.default().restoreCompletedTransactions()`
+- `Transaction.currentEntitlements`
+- `AppStore.sync()`
+- Strings: `"restore"`, `"restorePurchases"`, `"Restore Purchases"`
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| IAP detected + no restore found | **WARN** | Restore Purchases is required for all IAP apps (§3.1.1) |
+| IAP detected + restore found | ✅ PASS | Restore is implemented |
+| No IAP detected | ✅ N/A | Not required |
+
+#### 8e — External Payment for Digital Goods (§3.1.1)
+
+Grep for external payment processors being used:
+- `import Stripe`, `STPPaymentContext`, `STPPaymentHandler`
+- `import PayPal`, `PayPalCheckout`
+- `import Braintree`
+- `checkout.stripe.com`, `paypal.com/checkout` in string literals
+
+If detected, check if the app's context is **physical goods** (food delivery, e-commerce, ride sharing). If it's a digital product app:
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| External payment + digital goods context | **CRITICAL** | External payment for digital goods violates §3.1.1. Use StoreKit/IAP instead. |
+| External payment + physical goods context | **INFO** | Allowed for physical goods — verify context is correct. |
+
+> Ask the user: "I detected Stripe/PayPal. Does this app sell physical goods (allowed) or digital content/subscriptions (must use StoreKit)?"
+
+#### 8f — Sign in with Apple Parity (§4.8)
+
+If **any** of these social logins are detected:
+- `GIDSignIn` (Google)
+- `FacebookCore`, `FBSDKCoreKit` (Facebook)
+- `OAuthProvider` for any provider
+
+Then verify **Sign in with Apple** is also present:
+- `ASAuthorizationAppleIDProvider`
+- `import AuthenticationServices`
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Social login found + no Apple Sign In | **CRITICAL** | Sign in with Apple is required when offering social login (§4.8) |
+| Social login found + Apple Sign In present | ✅ PASS | Apple Sign In parity satisfied |
+| No social login | ✅ N/A | Not required |
+
+#### Compliance Summary Output
+
+Include a **Compliance Findings** section in the report with this table:
+
+```
+## App Store Compliance Findings
+
+| Check | Guideline | Status | Finding |
+|-------|-----------|--------|---------|
+| ATT for tracking SDKs | §5.1.2 | ✅ PASS / ⚠️ WARN / 🚨 CRITICAL | [reason] |
+| Purpose string quality | §5.1.1 | ... | [reason] |
+| Account deletion | §5.1.1 | ... | [reason] |
+| Restore Purchases | §3.1.1 | ... | [reason] |
+| External payment | §3.1.1 | ... | [reason] |
+| Apple Sign In parity | §4.8 | ... | [reason] |
+| Third-party AI disclosure | §5.1.2(i) | ... | [e.g. "OpenAI prompts — disclose in privacy policy"] |
+| Gemini free tier training | §5.1.2(i) | ... | [e.g. "Free tier trains on data — disclose or upgrade to paid"] |
+| Chatbot age restriction | §4.7.5 | ... | [e.g. "Chat feature requires age-restriction mechanism"] |
+```
+
+🚨 = Must fix before submission | ⚠️ = Should fix | ✅ = No action needed
+
+---
+
+### Phase 10: Document Generation (.docx Report)
 
 After generating the `PrivacyInfo.xcprivacy` and completing the Age Rating analysis, create a professional `.docx` document containing the complete report. This is the **primary output** of the skill.
 
@@ -665,7 +1133,13 @@ After generating the `PrivacyInfo.xcprivacy` and completing the Age Rating analy
 
 #### Document Structure
 
-Generate a `.docx` file named `APP-PRIVACY-AND-AGE-RATING-REPORT.docx` in the project root with the following structure:
+Generate a `.docx` file named `APP-PRIVACY-AND-AGE-RATING-REPORT.docx` saved to the `Docs/` folder in the project root (create the folder if it doesn't exist). This keeps a versioned copy alongside the project for future reference.
+
+```bash
+mkdir -p Docs/
+```
+
+The document has the following structure:
 
 1. **Title Page**
    - App Name (large, bold)
@@ -710,14 +1184,27 @@ Generate a `.docx` file named `APP-PRIVACY-AND-AGE-RATING-REPORT.docx` in the pr
    - Chance-Based Activities table
    - Important notes for edge cases
 
-8. **PrivacyInfo.xcprivacy Contents**
+8. **AI Data Practices** *(only if AI SDKs detected)*
+   - AI features overview table (Feature | Provider | Processing | Data sent)
+   - Per-provider data practices (retention, training, server location)
+   - App Store Connect declarations required for AI data
+   - Recommended privacy policy language per provider
+   - Recommended in-app consent disclosure text
+   - AI compliance findings (§5.1.2(i), §4.7, §4.7.5)
+
+9. **App Store Compliance Findings**
+   - Summary table: Check | Guideline | Status | Finding
+   - All compliance checks including AI-specific (§5.1.2(i), Gemini training, chatbot age gates)
+   - Color-coded: 🚨 CRITICAL / ⚠️ WARN / ✅ PASS
+
+10. **PrivacyInfo.xcprivacy Contents**
    - One subsection per platform target (e.g., "iOS Target", "watchOS Target")
    - The full XML content for each target formatted as a code block (monospace font)
 
-9. **Exemptions Applied**
-   - List of exempted data types with reasoning
+11. **Exemptions Applied**
+    - List of exempted data types with reasoning
 
-10. **Confidence Notes & Limitations**
+12. **Confidence Notes & Limitations**
     - Confidence level definitions (HIGH / MEDIUM / LOW)
     - Items requiring manual verification
     - Known limitations
@@ -736,9 +1223,10 @@ Generate a `.docx` file named `APP-PRIVACY-AND-AGE-RATING-REPORT.docx` in the pr
 Use the `docx` skill's `docx-js` approach:
 
 1. Create a Node.js script that uses the `docx` package to build the document programmatically
-2. Populate it with all the data gathered in Phases 1-7
-3. Save as `APP-PRIVACY-AND-AGE-RATING-REPORT.docx` in the project root
-4. Validate the output: `python scripts/office/validate.py APP-PRIVACY-AND-AGE-RATING-REPORT.docx` (if validator available)
+2. Populate it with all the data gathered in Phases 1-9
+3. Ensure the `Docs/` directory exists: `mkdir -p Docs/`
+4. Save as `Docs/APP-PRIVACY-AND-AGE-RATING-REPORT.docx`
+5. Validate the output: `python scripts/office/validate.py Docs/APP-PRIVACY-AND-AGE-RATING-REPORT.docx` (if validator available)
 
 If the docx skill is not available, fall back to generating the markdown report only and inform the user that the `.docx` output requires the docx skill to be installed.
 
@@ -875,10 +1363,11 @@ All output files are written to the project root directory:
 
 | File | Description |
 |------|-------------|
-| `APP-PRIVACY-AND-AGE-RATING-REPORT.docx` | Professional Word document with complete privacy & age rating report |
-| `<target>/PrivacyInfo.xcprivacy` | Apple privacy manifest — one per platform target (placed in each target's directory) |
+| `Docs/APP-PRIVACY-AND-AGE-RATING-REPORT.docx` | Professional Word document — privacy, age rating, AI data practices, compliance findings |
+| `Docs/AI-PRIVACY-DISCLOSURE.md` | AI-specific disclosure sheet — only generated if AI SDKs detected |
+| `<target>/PrivacyInfo.xcprivacy` | Apple privacy manifest — one per platform target |
 
-If multiple platform targets exist, a separate `PrivacyInfo.xcprivacy` is generated for each with only the data types and APIs relevant to that platform. The App Store Connect checklist and Age Rating questionnaire are included in the .docx report.
+If multiple platform targets exist, a separate `PrivacyInfo.xcprivacy` is generated for each with only the data types and APIs relevant to that platform. The `Docs/` folder keeps a versioned history of reports across submissions. The App Store Connect checklist, Age Rating, AI Data Practices, and Compliance Findings are all in the .docx report. `AI-PRIVACY-DISCLOSURE.md` is a standalone shareable sheet developers can paste into their privacy policy.
 
 ---
 
