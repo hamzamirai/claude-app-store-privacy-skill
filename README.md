@@ -20,7 +20,8 @@ Automatically scan your Apple platform Xcode project and generate complete App S
 | File | Description |
 |------|-------------|
 | `Docs/APP-PRIVACY-AND-AGE-RATING-REPORT.docx` | Full report: privacy declarations, age rating, AI data practices, compliance findings |
-| `Docs/AI-PRIVACY-DISCLOSURE.md` + `.pdf` | Branded AI disclosure sheet (generated on request, styled with app theme & colors) |
+| `Docs/AI-PRIVACY-DISCLOSURE.md` | Branded AI disclosure sheet (generated on request, styled with app theme & colors) |
+| `Shared/Views/Settings/AIPrivacyDisclosureView.swift` | Ready-to-use SwiftUI view — branded disclosure sheet with hero header, compliance badge, and disclosure cards matching the app's color system |
 | `<target>/PrivacyInfo.xcprivacy` | Apple privacy manifest — one per platform target |
 
 ## Supported Platforms
@@ -38,21 +39,12 @@ This skill has **two optional dependencies** that unlock richer output. The core
 | Skill | What it unlocks | Without it |
 |-------|----------------|------------|
 | **`docx`** | `APP-PRIVACY-AND-AGE-RATING-REPORT.docx` Word document | Falls back to markdown report only |
-| **`canvas-design`** | Branded `AI-PRIVACY-DISCLOSURE.pdf` with app colors & icon | Falls back to plain `.md` file only |
-
-Both are optional — install only what you need:
 
 ```bash
-# Install docx skill (for Word document report)
-# Get from: https://github.com/anthropics/anthropic-skills
-cp -r /path/to/anthropic-skills/skills/docx ~/.claude/skills/
-
-# Install canvas-design skill (for branded AI disclosure PDF)
-# Get from: https://github.com/anthropics/anthropic-skills
-cp -r /path/to/anthropic-skills/skills/canvas-design ~/.claude/skills/
+npm install -g docx
 ```
 
-**The skill always works without either** — you'll still get `PrivacyInfo.xcprivacy` files, the full privacy analysis, age rating answers, compliance checks, and AI provider disclosure text. The optional skills just upgrade the output format.
+**The skill always works without it** — you'll still get `PrivacyInfo.xcprivacy` files, the full privacy analysis, age rating answers, compliance checks, AI provider disclosure text, and the `AIPrivacyDisclosureView.swift` SwiftUI view. The optional `docx` skill upgrades the report to a Word document.
 
 ## Installation
 
@@ -121,7 +113,7 @@ When AI SDKs are detected, the skill:
 - Determines what App Store Connect data types to declare per §5.1.2(i)
 - Generates ready-to-paste privacy policy language per provider
 - Generates in-app consent disclosure text
-- Asks if you want a branded `AI-PRIVACY-DISCLOSURE.pdf` styled with your app's colors and icon
+- Generates a ready-to-use `AIPrivacyDisclosureView.swift` — a branded SwiftUI view styled with the app's color system (hero header, compliance badge, disclosure cards)
 
 ### Provider Policies at a Glance
 
