@@ -113,6 +113,10 @@ import Photos
 import Speech
 import ARKit
 import RealityKit
+import FoveatedRendering
+import FamilyControls
+import AccessorySetupKit
+import AccessoryNotifications
 import CoreML
 import NaturalLanguage
 import LocalAuthentication
@@ -263,6 +267,8 @@ firebaseai.googleapis.com
 | `SceneReconstructionProvider` | Scene reconstruction | visionOS |
 | `ARBodyTrackingConfiguration` | Body tracking | iOS |
 | `ImmersiveSpace` | Immersive content | visionOS |
+| `FoveatedRenderingSession` | Foveated streaming — reads eye-gaze to direct video quality | visionOS |
+| `FoveatedRenderingConfiguration` | Foveated rendering config (eye-tracking access) | visionOS |
 
 #### watchOS-Specific
 | Pattern | Implication |
@@ -289,6 +295,24 @@ firebaseai.googleapis.com
 |---------|-------------|
 | `TVUserManager` | Multi-user profile management |
 | `TVTopShelfContentProvider` | Top Shelf content (may use user data) |
+
+#### Family Controls / Screen Time (iOS — §3.3.3(Q))
+| Pattern | Implication |
+|---------|-------------|
+| `AuthorizationCenter.shared.requestAuthorization` | Family Controls permission request |
+| `FamilyActivityPicker` | Screen time / app-usage picker UI |
+| `FamilyActivitySelection` | App restriction data selected by parent |
+| `DeviceActivityReport` | Device activity monitoring (child's usage) |
+| `DeviceActivitySchedule` | Scheduled monitoring of device activity |
+| `ManagedSettingsStore` | Applying parental restrictions to managed device |
+
+#### Accessory Notifications & Live Activities (iOS — §3.3.7(J))
+| Pattern | Implication |
+|---------|-------------|
+| `AccessorySetupSession` | Accessory discovery/setup (system-managed, replaces direct Bluetooth discovery) |
+| `ASAccessory` | Accessory object (Bluetooth/WiFi accessory identity) |
+| `AccessorySession` | Accessory communication session |
+| `ActivityAuthorizationInfo` | Live Activities from an accessory |
 
 #### AI & Machine Learning (All Platforms)
 | Pattern | Implication | Provider |
@@ -439,6 +463,17 @@ Apply the following knowledge base to map each detected SDK/framework to Apple's
 
 > Ask user: "Are contacts uploaded to a server or used only on-device?"
 
+#### Family Controls (FamilyControls — §3.3.3(Q))
+| Data Type | Linked | Tracking | Purpose |
+|-----------|--------|----------|---------|
+| App Usage Data | Yes | No | App Functionality |
+| Screen Time Data | Yes | No | App Functionality |
+| Other Sensitive Info | Yes | No | App Functionality |
+
+> Note: FamilyControls involves monitoring children's device activity — among the most privacy-sensitive categories Apple defines.
+> Requires the `com.apple.developer.family-controls` entitlement (Apple must approve before submission).
+> Declare all app usage and screen time data as linked to the child's account.
+
 #### visionOS Spatial APIs (ARKit, RealityKit)
 | Data Type | Linked | Tracking | Purpose |
 |-----------|--------|----------|---------|
@@ -447,6 +482,16 @@ Apply the following knowledge base to map each detected SDK/framework to Apple's
 | Head Movement | No | No | App Functionality |
 
 > Note: If spatial data is processed on-device only (typical for visionOS), these may be exempt. Ask user to confirm.
+
+#### Foveated Rendering / Foveated Streaming (visionOS — §3.3.3(B))
+| Data Type | Linked | Tracking | Purpose |
+|-----------|--------|----------|---------|
+| Eye Tracking / Gaze Data | No | No | App Functionality |
+| Head Movement | No | No | App Functionality |
+
+> Note: Foveated Streaming uses real-time eye-gaze to optimize video quality — this constitutes eye-tracking data per §3.3.3(B).
+> Declare Eye Tracking data even if processed on-device only.
+> Ask user: "Is gaze/eye data sent off-device or used purely for local rendering?"
 
 #### Camera / Photos / Microphone
 | Data Type | Linked | Tracking | Purpose |
@@ -493,6 +538,16 @@ Apply the following knowledge base to map each detected SDK/framework to Apple's
 | Data Type | Linked | Tracking | Purpose |
 |-----------|--------|----------|---------|
 | Device ID | Yes | No | App Functionality |
+
+#### Accessory Notifications / Accessory Live Activities (§3.3.7(J))
+| Data Type | Linked | Tracking | Purpose |
+|-----------|--------|----------|---------|
+| Device ID | ASK | No | App Functionality |
+
+> Note: AccessorySetupKit (§3.3.7(J)) scopes what accessory data the app directly receives versus what the system handles.
+> Ask user: "Does the app read accessory identifiers or Bluetooth MAC addresses directly, or rely solely on the system AccessorySetupKit flow?"
+> If system-managed: Device ID disclosure is likely exempt.
+> If accessory Live Activities are used: confirm no user-identifiable data is embedded in the activity payload.
 
 #### OpenAI API (ChatGPT / GPT-4 / GPT-4o)
 | Data Type | Linked | Tracking | Purpose | Notes |
@@ -1195,6 +1250,44 @@ Also grep `.swift` files for UI strings matching these patterns.
 |--------|----------|---------|
 | Placeholder strings found in localization | **WARN** | Placeholder or incomplete text found — remove before submission (§2.1 requires complete app) |
 | No placeholders found | ✅ PASS | No obvious placeholder content detected |
+
+#### 8l — Family Controls Entitlement (§3.3.3(Q))
+
+If `FamilyControls` is imported **or** `AuthorizationCenter.shared.requestAuthorization` / `DeviceActivityReport` / `ManagedSettingsStore` is detected:
+
+- Grep all `.entitlements` files for `com.apple.developer.family-controls`.
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| FamilyControls detected + entitlement missing | **CRITICAL** | `com.apple.developer.family-controls` entitlement is required and must be approved by Apple before submission (§3.3.3(Q)) |
+| FamilyControls detected + entitlement present | ✅ PASS | Family Controls entitlement configured |
+| FamilyControls + Kids-category indicators detected | **WARN** | Family monitoring apps should not target the Kids category — App Store review may reject |
+
+> Kids-category indicators: app name or bundle ID contains `kids`, `child`, `children`, `junior`, `baby`, `toddler`.
+
+#### 8m — Foveated Streaming Eye-Tracking Disclosure (§3.3.3(B))
+
+If `FoveatedRenderingSession`, `FoveatedRenderingConfiguration`, or `import FoveatedRendering` is detected:
+
+Cross-check whether **Eye Tracking / Gaze Data** has been added to the privacy data types in Phase 4.
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Foveated Streaming detected + Eye Tracking not in privacy report | **WARN** | Foveated Streaming reads eye-gaze data — declare Eye Tracking and Head Movement per §3.3.3(B) |
+| Foveated Streaming detected + Eye Tracking declared | ✅ PASS | Eye-tracking data declared in privacy report |
+
+#### 8n — Accessory Notifications / Live Activities Scope (§3.3.7(J))
+
+If `AccessorySetupKit`, `AccessoryNotifications`, `AccessorySession`, or `ASAccessory` is imported:
+
+- Grep for `CBPeripheral` or direct Bluetooth UUID access alongside accessory framework usage.
+- Grep Live Activities payload structs for user-identifiable string fields.
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Direct accessory identifier / Bluetooth MAC access detected alongside accessory frameworks | **WARN** | Direct accessory ID access may require Device ID disclosure — verify whether system-managed AccessorySetupKit flow was used (§3.3.7(J)) |
+| Accessory Live Activities payload contains user-identifiable fields | **WARN** | Verify no user-identifiable data is embedded in accessory Live Activity content |
+| AccessorySetupKit used with no direct identifier access | ✅ INFO | System-managed accessory setup — Device ID disclosure likely exempt |
 
 ---
 
