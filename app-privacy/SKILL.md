@@ -774,6 +774,22 @@ For each descriptor, determine the frequency: **None**, **Infrequent/Mild**, or 
 | **17+** | Frequent: drugs/alcohol, sexual content, realistic violence, simulated gambling. Unrestricted web access. Frequent medical info. |
 | **Unrated** | Graphic sexual content/nudity OR prolonged graphic violence → **Cannot be published** |
 
+#### Regional Age Rating Overrides
+
+Some storefronts enforce a higher minimum rating than the global Apple mapping. Apply these **after** the global rating is determined — the regional rating never lowers the global rating, only raises it.
+
+##### Brazil (BRA) Storefront
+Effective **March 30, 2026**, on iOS 26 / iPadOS 26 / macOS Tahoe 26 / tvOS 26 / visionOS 26 / watchOS 26:
+
+| Content Descriptor (set to Yes) | Brazil Rating Floor |
+|----------------------------------|---------------------|
+| Advertising                      | **A12**             |
+| Messaging and Chat               | **A12**             |
+
+> If either descriptor is detected, report the Brazil storefront rating as **A12** regardless of the global rating.
+> This is an automatic platform enforcement — no action is required in App Store Connect, but developers should be
+> aware their app will appear as A12 in Brazil on the above OS versions.
+
 #### Age Rating Output Format
 
 Include in the report:
@@ -840,6 +856,11 @@ Include in the report:
 ### Important Notes
 - [Any edge cases or items requiring manual verification]
 - [e.g., "App has UGC — ensure content moderation is in place"]
+
+### Regional Overrides
+| Storefront | Trigger | Effective Rating | OS Versions |
+|------------|---------|------------------|-------------|
+| Brazil (BRA) | Advertising or Messaging and Chat = Yes | [A12 / N/A — matches global] | iOS 26+, iPadOS 26+, macOS Tahoe 26+, tvOS 26+, visionOS 26+, watchOS 26+ |
 ```
 
 > **Bias toward higher rating**: When unsure, recommend the higher rating. A rejected submission for incorrect age rating is worse than a slightly conservative rating.
@@ -1288,6 +1309,15 @@ If `AccessorySetupKit`, `AccessoryNotifications`, `AccessorySession`, or `ASAcce
 | Direct accessory identifier / Bluetooth MAC access detected alongside accessory frameworks | **WARN** | Direct accessory ID access may require Device ID disclosure — verify whether system-managed AccessorySetupKit flow was used (§3.3.7(J)) |
 | Accessory Live Activities payload contains user-identifiable fields | **WARN** | Verify no user-identifiable data is embedded in accessory Live Activity content |
 | AccessorySetupKit used with no direct identifier access | ✅ INFO | System-managed accessory setup — Device ID disclosure likely exempt |
+
+#### 8o — Brazil Storefront A12 Impact (effective March 30, 2026)
+
+If **Advertising = Yes** (AdMob / `GADBannerView` / `GADInterstitialAd` / `GADRewardedAd` / Facebook Ads detected) **OR** **Messaging and Chat = Yes** (`MessageKit`, `Stream`, `SendBird`, WebSocket chat, Firebase Realtime Database for chat detected):
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Advertising or Messaging and Chat detected | **INFO** | This app will be automatically rated **A12** on the Brazil storefront on iOS 26+ / iPadOS 26+ / macOS Tahoe 26+ / tvOS 26+ / visionOS 26+ / watchOS 26+. No action required in App Store Connect — Apple enforces this automatically. Verify the Kids category is not targeted. |
+| Neither descriptor detected | ✅ N/A | Brazil A12 storefront override does not apply |
 
 ---
 
