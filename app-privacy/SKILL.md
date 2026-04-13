@@ -80,6 +80,8 @@ Scan the project root to identify the project structure and dependency managemen
 
 4. **Report** what was found: project name, target platform(s), dependency manager(s), number of dependencies detected.
 
+5. **Record detected platforms** as `DETECTED_PLATFORMS` — a set drawn from `iOS`, `iPadOS`, `macOS`, `visionOS`, `watchOS`, `tvOS`. If none can be determined, default to `[iOS, iPadOS]`. iOS and iPadOS are always treated as a pair — detecting one implies the other. All Phase 9 compliance checks reference this set.
+
 ---
 
 ### Phase 2: Dependency & Import Detection
@@ -863,6 +865,17 @@ Include in the report:
 | Brazil (BRA) | Advertising or Messaging and Chat = Yes | [A12 / N/A — matches global] | iOS 26+, iPadOS 26+, macOS Tahoe 26+, tvOS 26+, visionOS 26+, watchOS 26+ |
 ```
 
+#### Platform Notes for Age Rating
+
+Age rating uses the same scale (4+, 9+, 12+, 17+) across all Apple platforms, but the applicable content descriptors and restrictions vary per platform:
+
+| Platform | Notes |
+|----------|-------|
+| **watchOS** | Very limited content surface. **Display advertising is prohibited** (§2.5.18) — if Advertising = Yes is set for the watchOS target, that is a separate §2.5.18 violation (see check 8p). Messaging/Chat features on watchOS are rare; only flag if present in Watch target files. |
+| **tvOS** | ATT is supported on tvOS 14.5+. Advertising descriptor may apply if ad SDKs target tvOS. Age rating applies as normal. |
+| **macOS** | Same rating system. Mac Catalyst apps inherit the iOS rating. Universal purchase apps share one rating across all platforms. |
+| **visionOS** | Same rating system as iOS. Spatial/immersive content does not have a separate violence or horror descriptor — evaluate under standard descriptors. |
+
 > **Bias toward higher rating**: When unsure, recommend the higher rating. A rejected submission for incorrect age rating is worse than a slightly conservative rating.
 
 ---
@@ -1096,7 +1109,12 @@ Generated: [date]
 
 After Age Rating analysis and before generating the report, run these submission compliance checks. These are derived from Apple Review Guidelines and flag critical rejection risks found in greenlight-style scanning.
 
+> **Platform-scoped checks**: Each check below opens with a `> Platforms:` blockquote specifying which platforms it applies to. If none of those platforms are in `DETECTED_PLATFORMS`, skip the check entirely and record it as `⏭ SKIPPED (platform not targeted)` in the Compliance Findings table.
+
 #### 8a — ATT Cross-Check (§5.1.2)
+
+> **Platforms**: iOS, iPadOS, macOS (11.1+), tvOS (14.5+), visionOS
+> *Skip if none of these are in `DETECTED_PLATFORMS` — ATT framework is not available on watchOS.*
 
 If **any** of these were detected in Phase 2 or 3:
 - `GoogleMobileAds`, `GADBannerView`, `GADInterstitialAd`, `GADRewardedAd`
@@ -1115,6 +1133,8 @@ Then **verify ATT is implemented** by grepping for:
 | No tracking SDK | ✅ N/A | ATT not required |
 
 #### 8b — Info.plist Purpose String Quality (§5.1.1)
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS, watchOS, tvOS — runs on all platforms; only check keys applicable to the detected platform per the table below.
 
 Grep for all `NSUsageDescription` keys in `Info.plist` files. Flag any string that:
 - Is empty or missing when a permission is requested
@@ -1140,7 +1160,28 @@ Grep for all `NSUsageDescription` keys in `Info.plist` files. Flag any string th
 - `NSSpeechRecognitionUsageDescription` — if `SFSpeechRecognizer`
 - `NSFaceIDUsageDescription` — if `LocalAuthentication`
 
+**Platform applicability per key — only flag missing strings for the detected platform:**
+
+| Permission Key | iOS/iPadOS | macOS | visionOS | watchOS | tvOS |
+|----------------|-----------|-------|----------|---------|------|
+| `NSCameraUsageDescription` | ✓ | ✓ | — | — | ✓ (17+) |
+| `NSMicrophoneUsageDescription` | ✓ | ✓ | ✓ | — | ✓ |
+| `NSPhotoLibraryUsageDescription` | ✓ | ✓ | — | — | — |
+| `NSLocationWhenInUseUsageDescription` | ✓ | ✓ | ✓ | ✓ | — |
+| `NSLocationAlwaysAndWhenInUseUsageDescription` | ✓ | ✓ | — | — | — |
+| `NSContactsUsageDescription` | ✓ | ✓ | — | — | — |
+| `NSHealthShareUsageDescription` | ✓ | — | ✓ | ✓ | — |
+| `NSHealthUpdateUsageDescription` | ✓ | — | ✓ | ✓ | — |
+| `NSMotionUsageDescription` | ✓ | — | — | ✓ | — |
+| `NSSpeechRecognitionUsageDescription` | ✓ | ✓ | ✓ | — | — |
+| `NSFaceIDUsageDescription` | ✓ | — | ✓ | — | — |
+
+> Only flag a missing key as CRITICAL/WARN if the associated code pattern was detected **and** the key is valid for the detected platform.
+
 #### 8c — Account Deletion Check (§5.1.1)
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS, watchOS, tvOS — §5.1.1(v) requires account deletion on all platforms where accounts can be created.
+> For watchOS: only applies if the Watch app has its own independent account-creation flow; skip if auth is handled entirely by the companion iOS app.
 
 If **any account creation** was detected (email sign-up, Google Sign In, Apple Sign In, Firebase Auth), then grep for account deletion:
 - `deleteUser()`, `delete(completion:)` on Firebase Auth user
@@ -1155,6 +1196,9 @@ If **any account creation** was detected (email sign-up, Google Sign In, Apple S
 
 #### 8d — Restore Purchases Check (§3.1.1)
 
+> **Platforms**: iOS, iPadOS, macOS, visionOS, tvOS
+> *Skip for watchOS — watchOS does not support independent in-app purchases; it uses entitlements from the iOS companion app.*
+
 If **StoreKit** (`SKPaymentQueue`, `Product.products`, `Transaction.currentEntitlements`) was detected, grep for restore purchases:
 - `SKPaymentQueue.default().restoreCompletedTransactions()`
 - `Transaction.currentEntitlements`
@@ -1168,6 +1212,10 @@ If **StoreKit** (`SKPaymentQueue`, `Product.products`, `Transaction.currentEntit
 | No IAP detected | ✅ N/A | Not required |
 
 #### 8e — External Payment for Digital Goods (§3.1.1)
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS, tvOS
+> *Skip for watchOS — watchOS has no independent payment flows.*
+> Note for macOS: §3.1.1 applies to Mac App Store distributions; the skill targets App Store submissions only.
 
 Grep for external payment processors being used:
 - `import Stripe`, `STPPaymentContext`, `STPPaymentHandler`
@@ -1186,6 +1234,9 @@ If detected, check if the app's context is **physical goods** (food delivery, e-
 
 #### 8f — Sign in with Apple Parity (§4.8)
 
+> **Platforms**: iOS, iPadOS, macOS, visionOS, tvOS — per §4.8, parity is required on all platforms offering third-party login.
+> For watchOS: skip unless the Watch app presents its own independent sign-in UI; auth is typically delegated to the iOS companion.
+
 If **any** of these social logins are detected:
 - `GIDSignIn` (Google)
 - `FacebookCore`, `FBSDKCoreKit` (Facebook)
@@ -1202,6 +1253,9 @@ Then verify **Sign in with Apple** is also present:
 | No social login | ✅ N/A | Not required |
 
 #### 8g — UGC Safety (§1.2)
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS, tvOS — per §1.2.
+> For watchOS: run only if UGC or chat code patterns are found specifically in Watch target files (`#if os(watchOS)` blocks or Watch target directory).
 
 If **any** of these were detected in Phase 2 or 3:
 - Firestore detected AND `Firestore.firestore()` writes exist (suggesting shared user content)
@@ -1221,17 +1275,27 @@ Then **verify moderation and abuse reporting** by grepping for:
 
 #### 8h — Kids Category Restrictions (§1.3)
 
+> **Platforms**: iOS, iPadOS, macOS, visionOS, watchOS, tvOS — per §1.3, Kids category restrictions apply across all App Store platforms.
+
 If **HealthKit**, **CNContactStore**, **GoogleMobileAds**, or **FacebookCore** is detected, AND the app name/bundle ID contains `kids`, `child`, `children`, `junior`, `baby`, `toddler`, or `family`:
+
+Also check for **third-party analytics SDKs** alongside kids-category indicators — these are prohibited under §5.1.4(a):
+- `Mixpanel`, `Amplitude`, `Segment`, `PostHog`, `TelemetryDeck`
+- `Firebase Analytics` (`Analytics.logEvent`)
+- `Braze`, `Leanplum`, `OneSignal`
 
 | Result | Severity | Finding |
 |--------|----------|---------|
 | Kids-category app + HealthKit detected | **CRITICAL** | HealthKit is not permitted in Kids category apps (§1.3) |
 | Kids-category app + Contacts detected | **CRITICAL** | Contacts framework is not permitted in Kids category apps (§1.3) |
 | Kids-category app + ad SDK detected | **CRITICAL** | Third-party advertising SDKs (AdMob, Facebook Ads) are banned in Kids category (§1.3) |
-| Kids-category app + third-party analytics | **WARN** | Many third-party analytics SDKs are not permitted in Kids category — review Apple's approved list |
+| Kids-category app + third-party analytics SDK detected | **CRITICAL** | Third-party analytics SDKs are not permitted in Kids category apps (§5.1.4(a)). Remove or replace with Apple's first-party alternatives. |
 | No kids indicators | ✅ N/A | Kids category restrictions do not apply |
 
 #### 8i — Subscription Management Link (§3.1.2)
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS, tvOS — per §3.1.2, subscriptions must work on all devices where the app is available, and each platform must provide a management link.
+> *Skip for watchOS — subscription purchases and management are handled via the iOS companion app.*
 
 If **RevenueCat** (`Purchases.configure`) or **StoreKit** subscription products are detected (grep for `.autoRenewable`, `ProductType.autoRenewable`, `SubscriptionPeriod`, or `SKProductSubscriptionPeriod`), then verify a subscription management link exists:
 
@@ -1249,6 +1313,8 @@ If **RevenueCat** (`Purchases.configure`) or **StoreKit** subscription products 
 
 #### 8j — Privacy Policy URL (from §5.1.1 + App Review requirements)
 
+> **Platforms**: iOS, iPadOS, macOS, visionOS, watchOS, tvOS — required on all platforms per §5.1.1.
+
 Grep all `Info.plist` files for:
 - `NSPrivacyPolicyURL`
 
@@ -1262,6 +1328,8 @@ Also grep all `.swift` files for:
 
 #### 8k — Placeholder Content Check (§2.1)
 
+> **Platforms**: iOS, iPadOS, macOS, visionOS, watchOS, tvOS — §2.1 completeness requirement applies to all platforms.
+
 Grep all `.xcstrings`, `Localizable.strings`, and `InfoPlist.strings` files for:
 - `TODO`, `FIXME`, `Coming Soon`, `Lorem ipsum`, `Placeholder`, `Test text`, `Sample text`, `Dummy`
 
@@ -1273,6 +1341,9 @@ Also grep `.swift` files for UI strings matching these patterns.
 | No placeholders found | ✅ PASS | No obvious placeholder content detected |
 
 #### 8l — Family Controls Entitlement (§3.3.3(Q))
+
+> **Platforms**: iOS, iPadOS only
+> *Skip for macOS, visionOS, watchOS, tvOS — FamilyControls framework is not available on these platforms.*
 
 If `FamilyControls` is imported **or** `AuthorizationCenter.shared.requestAuthorization` / `DeviceActivityReport` / `ManagedSettingsStore` is detected:
 
@@ -1288,6 +1359,9 @@ If `FamilyControls` is imported **or** `AuthorizationCenter.shared.requestAuthor
 
 #### 8m — Foveated Streaming Eye-Tracking Disclosure (§3.3.3(B))
 
+> **Platforms**: visionOS only
+> *Skip for all other platforms — FoveatedRendering framework only exists on visionOS (Apple Vision Pro).*
+
 If `FoveatedRenderingSession`, `FoveatedRenderingConfiguration`, or `import FoveatedRendering` is detected:
 
 Cross-check whether **Eye Tracking / Gaze Data** has been added to the privacy data types in Phase 4.
@@ -1298,6 +1372,9 @@ Cross-check whether **Eye Tracking / Gaze Data** has been added to the privacy d
 | Foveated Streaming detected + Eye Tracking declared | ✅ PASS | Eye-tracking data declared in privacy report |
 
 #### 8n — Accessory Notifications / Live Activities Scope (§3.3.7(J))
+
+> **Platforms**: iOS, iPadOS only
+> *Skip for macOS, visionOS, watchOS, tvOS — AccessorySetupKit and AccessoryNotifications are not available on these platforms.*
 
 If `AccessorySetupKit`, `AccessoryNotifications`, `AccessorySession`, or `ASAccessory` is imported:
 
@@ -1312,12 +1389,289 @@ If `AccessorySetupKit`, `AccessoryNotifications`, `AccessorySession`, or `ASAcce
 
 #### 8o — Brazil Storefront A12 Impact (effective March 30, 2026)
 
+> **Platforms**: iOS, iPadOS, macOS, visionOS, watchOS, tvOS — Apple applies the Brazil A12 enforcement across all platforms.
+
 If **Advertising = Yes** (AdMob / `GADBannerView` / `GADInterstitialAd` / `GADRewardedAd` / Facebook Ads detected) **OR** **Messaging and Chat = Yes** (`MessageKit`, `Stream`, `SendBird`, WebSocket chat, Firebase Realtime Database for chat detected):
 
 | Result | Severity | Finding |
 |--------|----------|---------|
 | Advertising or Messaging and Chat detected | **INFO** | This app will be automatically rated **A12** on the Brazil storefront on iOS 26+ / iPadOS 26+ / macOS Tahoe 26+ / tvOS 26+ / visionOS 26+ / watchOS 26+. No action required in App Store Connect — Apple enforces this automatically. Verify the Kids category is not targeted. |
 | Neither descriptor detected | ✅ N/A | Brazil A12 storefront override does not apply |
+
+---
+
+#### 8p — No Advertising in Extensions, Widgets, App Clips, Notifications, Keyboards, or watchOS (§2.5.18)
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS, watchOS, tvOS — applies wherever these restricted extension contexts exist.
+
+Per §2.5.18, display advertising must NOT appear in: extensions, App Clips, widgets, notifications, keyboards, or watchOS apps — only in the main app binary.
+
+**Detection steps:**
+1. Grep for ad SDK usage inside `#if os(watchOS)` blocks or Watch target files — if found, CRITICAL.
+2. Grep for ad SDK usage inside widget extension targets (target name containing "Widget") — if found, CRITICAL.
+3. Grep for ad SDK usage inside keyboard extension targets (`UIInputViewController` principal class) — if found, CRITICAL.
+4. Grep for ad SDK usage inside App Clip targets (target name containing "AppClip" or "Clip") — if found, CRITICAL.
+5. Grep for ad SDK usage inside notification service / content extension targets — if found, CRITICAL.
+6. Grep for `CLSDataStore` or `CLSContext` (ClassKit) alongside any ad SDK — school/classroom data cannot power ad targeting per §2.5.18.
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Ad SDK in watchOS target or `#if os(watchOS)` block | **CRITICAL** | Display advertising is prohibited in watchOS apps (§2.5.18). |
+| Ad SDK in widget extension target | **CRITICAL** | Display advertising is not permitted in widget extensions (§2.5.18). |
+| Ad SDK in keyboard extension target | **CRITICAL** | Display advertising is not permitted in keyboard extensions (§2.5.18). |
+| Ad SDK in App Clip target | **CRITICAL** | Display advertising is not permitted in App Clips (§2.5.18). |
+| Ad SDK in notification extension target | **CRITICAL** | Display advertising is not permitted in notification extensions (§2.5.18). |
+| ClassKit (`CLSDataStore`) + ad SDK both detected | **CRITICAL** | Advertising based on school/classroom data (ClassKit) is prohibited (§2.5.18). |
+| Ad SDK only in main app binary | ✅ PASS | Advertising confined to main app binary — no violation. |
+| No ad SDK detected | ✅ N/A | Not applicable |
+
+---
+
+#### 8q — macOS: App Sandbox Entitlement (§2.4.5(i))
+
+> **Platforms**: macOS only
+> *Skip for all other platforms.*
+
+If **macOS** is in `DETECTED_PLATFORMS`, grep the macOS `.entitlements` file(s) for:
+- `com.apple.security.app-sandbox` set to `<true/>`
+
+Also, if network calls are detected (`URLSession`, `Alamofire`, `URLRequest`) in macOS target code, check for:
+- `com.apple.security.network.client` — required for outgoing network connections in a sandboxed app
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| macOS target + `com.apple.security.app-sandbox` missing or `<false/>` | **CRITICAL** | Mac App Store apps must enable App Sandbox (§2.4.5(i)). Add `com.apple.security.app-sandbox = true` to the macOS entitlements. |
+| macOS target + network calls detected + `network.client` entitlement missing | **WARN** | Sandboxed macOS apps making outbound network calls must include the `com.apple.security.network.client` entitlement. |
+| macOS target + sandbox present + network entitlement correct | ✅ PASS | App Sandbox configured correctly |
+
+---
+
+#### 8r — macOS: No Third-Party Auto-Updater (§2.4.5(vii))
+
+> **Platforms**: macOS only
+> *Skip for all other platforms.*
+
+If **macOS** is in `DETECTED_PLATFORMS`, grep Swift files and `Info.plist`/`Package.swift`/`Podfile`/`Cartfile` for third-party update mechanisms:
+- `import Sparkle` or `SPUUpdater`, `SUUpdater`
+- `SUFeedURL` or `SUScheduledCheckInterval` keys in `Info.plist`
+- `import DevMateKit`
+- `Sparkle` in dependency manifests
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Sparkle or other third-party auto-updater detected in macOS target | **CRITICAL** | Mac App Store apps must deliver all updates through the Mac App Store only — third-party updaters (Sparkle, DevMateKit) are prohibited (§2.4.5(vii)). Remove the updater dependency entirely. |
+| No third-party updater detected | ✅ N/A | No prohibited update mechanism detected |
+
+---
+
+#### 8s — HealthKit Data Used for Advertising or Analytics (§5.1.3(i))
+
+> **Platforms**: iOS, iPadOS, visionOS, watchOS
+> *Skip for macOS, tvOS — HealthKit is not available on these platforms.*
+
+If **HealthKit** (`HKHealthStore`, `HKQuantityType`, `HKCategoryType`) is detected **AND** any of the following are also detected:
+- `GoogleMobileAds`, `GADBannerView`, `GADInterstitialAd` (ad serving)
+- `FacebookCore`, `FBSDKCoreKit` (Facebook attribution/ads)
+- `Mixpanel`, `Amplitude`, `Segment`, `Branch`, `Kochava`, `AppsFlyer`, `Adjust` (third-party analytics/attribution)
+
+Then check whether HealthKit data is isolated from these SDKs (i.e., no shared identifiers, no analytics events fired from HealthKit data handlers).
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| HealthKit + ad/analytics SDK detected in same target | **CRITICAL** | Health and fitness data must not be shared with third-party advertising or data-mining services (§5.1.3(i)). Ensure HealthKit data is strictly isolated from all ad/analytics SDKs. |
+| HealthKit + ad SDK detected but in separate `#if os()` targets | **WARN** | Verify HealthKit data is not being passed to the ad/analytics SDK even indirectly. |
+| HealthKit present, no ad/analytics SDK | ✅ N/A | No health data advertising conflict detected |
+
+---
+
+#### 8t — Location Data Used for Advertising (§5.1.5)
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS
+> *Skip for watchOS (location + ads is atypical), tvOS (no location services).*
+
+If **CoreLocation** (`CLLocationManager`, `requestWhenInUseAuthorization`, `requestAlwaysAuthorization`) is detected **AND** any ad or attribution SDK is also detected:
+- `GoogleMobileAds`, `GADBannerView` (AdMob)
+- `FacebookCore`, `FBSDKCoreKit`
+- `Adjust`, `AppsFlyer`, `Branch`, `Kochava`, `Singular`
+- `ASIdentifierManager`, `advertisingIdentifier`
+
+Check whether location data is passed to ad/tracking SDK calls.
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Location + ad/tracking SDK detected — location data appears in proximity to ad SDK calls | **WARN** | Location data may not be used for advertising purposes without explicit user consent per §5.1.5. Ensure location is not being passed to ad SDKs. Verify ATT consent covers this use. |
+| Location + ad SDK detected but clearly separated (different features) | ✅ INFO | Location and ad SDK both present — verify usage is independent and location is not shared with the ad SDK. |
+| No ad SDK | ✅ N/A | No location-advertising conflict detected |
+
+---
+
+#### 8u — VPN App Requirements (§5.4)
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS
+> *Skip for watchOS, tvOS.*
+
+If `NetworkExtension` or `NEVPNManager` or `NETunnelProvider` is detected:
+
+- Grep for `NEVPNManager`, `NETunnelProviderProtocol`, `NEPacketTunnelProvider` (legitimate VPN APIs)
+- Grep for `NEFilterDataProvider`, `NEFilterControlProvider` (content filtering)
+- Check `.entitlements` files for `com.apple.developer.networking.vpn.api` or `com.apple.developer.networking.networkextension`
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| NetworkExtension detected + VPN entitlement missing | **CRITICAL** | VPN functionality requires the `com.apple.developer.networking.networkextension` entitlement — this must be approved by Apple (§5.4). |
+| VPN framework + ad SDK or analytics SDK detected | **WARN** | VPN apps must not collect or sell user network data for advertising or data mining (§5.4). Verify no user traffic data is shared with ad/analytics SDKs. |
+| NetworkExtension detected + entitlement present | ✅ PASS | VPN entitlement configured |
+
+---
+
+#### 8v — Mobile Device Management Entitlement (§5.5)
+
+> **Platforms**: iOS, iPadOS, macOS
+> *Skip for visionOS, watchOS, tvOS.*
+
+If `import MDM` or `DeviceManagement` framework references, `MDMClient`, `MCProfileManager`, `MDMServerURL` string literals, or `com.apple.mdm` payload identifiers are detected:
+
+- Grep `.entitlements` for `com.apple.developer.device-management`
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| MDM framework/patterns detected + entitlement missing | **CRITICAL** | MDM functionality requires Apple-approved entitlement. This capability is restricted to enterprise/educational deployments and cannot be distributed to general consumers via the App Store (§5.5). |
+| MDM patterns detected + app context is consumer (no enterprise indicators) | **CRITICAL** | MDM apps must not be offered to general consumers — they are permitted only for legitimate enterprise or educational management purposes (§5.5). |
+| MDM entitlement present + enterprise/edu context confirmed | ✅ INFO | MDM entitlement present — verify Apple has approved this capability. |
+
+---
+
+#### 8w — Medical App Disclaimer and Accuracy Claims (§1.4.1)
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS, watchOS
+> *Skip for tvOS.*
+
+If **HealthKit** is detected, or medical terminology is found in localization strings (grep for `diagnosis`, `treatment`, `dosage`, `prescription`, `symptom`, `blood pressure`, `blood glucose`, `ECG`, `x-ray`, `oxygen level`):
+
+1. Grep for medical disclaimer text — look for strings containing `"consult a doctor"`, `"not a substitute for professional medical advice"`, `"seek professional help"`, `"consult your physician"`, `"not intended to diagnose"` in `.xcstrings` or `.strings` files.
+2. Grep for FDA or regulatory clearance documentation references.
+3. Grep for sensor-based health measurement claims (`camera blood pressure`, `microphone heart rate`, `device x-ray`) — these are prohibited per §1.4.1.
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Medical terminology + health measurements detected + no disclaimer found | **WARN** | Apps providing health data should include a disclaimer advising users to consult a doctor (§1.4.1). |
+| Prohibited sensor-based measurements detected (`camera blood pressure`, `microphone heart rate`, `device x-ray`) | **CRITICAL** | Apps claiming to measure clinical health data using only device sensors (camera/mic) are not permitted (§1.4.1). |
+| Medical app + disclaimer present | ✅ PASS | Medical disclaimer detected |
+
+---
+
+#### 8x — Export Compliance: Encryption Declaration (Required Before Submission)
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS, watchOS, tvOS — required for all apps.
+
+Grep all `Info.plist` files for:
+- `ITSAppUsesNonExemptEncryption`
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| `ITSAppUsesNonExemptEncryption` key missing from Info.plist | **WARN** | Apple requires all apps to declare their encryption usage — add `ITSAppUsesNonExemptEncryption` to `Info.plist`. Set to `NO` if the app only uses standard HTTPS/TLS. Set to `YES` if it uses custom or proprietary encryption, and complete the encryption documentation in App Store Connect. |
+| `ITSAppUsesNonExemptEncryption` = `YES` detected | **INFO** | App declares non-exempt encryption. Ensure the Encryption Documentation section in App Store Connect is completed and an ERN (Encryption Registration Number) is obtained if required. |
+| `ITSAppUsesNonExemptEncryption` = `NO` present | ✅ PASS | Encryption declaration present |
+
+---
+
+#### 8y — Private or Deprecated API Usage (§2.5.1)
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS, watchOS, tvOS — applies to all platforms.
+
+Grep all `.swift` files for known private API patterns:
+- Method calls beginning with `_` prefix on UIKit/AppKit objects: `view._something`, `layer._something`
+- Imports of private frameworks: `import UIKitCore`, `import SpringBoardServices`, `import FrontBoardServices`, `import BackBoardServices`, `import IOKit` (on iOS)
+- String references to private entitlements: `"com.apple.private."` prefix in `.entitlements`
+- Deprecated class/method names: `UIAlertView`, `UIActionSheet`, `MPMoviePlayerController`, `UIWebView`
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Private framework import detected | **CRITICAL** | Private frameworks are prohibited in App Store submissions (§2.5.1). Remove `import [PrivateFramework]` — use only public APIs. |
+| Private entitlement (`com.apple.private.*`) detected | **CRITICAL** | Private entitlements will cause binary rejection at review. Remove all `com.apple.private.*` entitlement keys. |
+| `UIWebView` detected | **WARN** | `UIWebView` is deprecated — replace with `WKWebView` (§2.5.1 requires current APIs). |
+| `UIAlertView` or `UIActionSheet` detected | **INFO** | `UIAlertView`/`UIActionSheet` are deprecated — replace with `UIAlertController`. |
+| No private APIs found | ✅ PASS | No prohibited private API usage detected |
+
+---
+
+#### 8z — Loot Box / Randomized Reward Odds Disclosure (§3.1.1)
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS, tvOS — wherever IAP is available.
+> *Skip for watchOS.*
+
+If any of these randomized-reward patterns are detected:
+- `Math.random()`, `arc4random()`, `Int.random()` in proximity to IAP purchase completion handlers
+- Strings like `"loot box"`, `"mystery box"`, `"gacha"`, `"random reward"`, `"randomized"` in localization files
+- Randomized item selection after `paymentQueue(_:updatedTransactions:)` or `Transaction.finish()`
+
+Then grep for odds/probability disclosure text:
+- `"odds"`, `"probability"`, `"chance"`, `"likelihood"` in localization strings
+- `"1 in"`, `"%"` percentage chance strings near reward/loot UI
+- A dedicated odds/disclosure view or screen
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Randomized reward mechanic with IAP detected + no odds disclosure found | **CRITICAL** | Apps offering loot boxes or randomized in-app purchase rewards must disclose the odds of receiving each item type prior to purchase (§3.1.1). Add an odds disclosure screen or label. |
+| Randomized reward + odds disclosure present | ✅ PASS | Odds disclosure detected |
+| No randomized reward mechanic | ✅ N/A | Not applicable |
+
+---
+
+#### 8aa — Facial Recognition for Auth Must Use LocalAuthentication (§2.5.13)
+
+> **Platforms**: iOS, iPadOS, visionOS
+> *Skip for macOS (Touch ID/Face ID via LocalAuthentication is used differently), watchOS, tvOS.*
+
+If **face tracking** APIs are detected alongside authentication flows:
+- `ARFaceTrackingConfiguration` or `ARSCNView` with face detection
+- `Vision` framework face landmark detection (`VNDetectFaceLandmarksRequest`)
+
+AND authentication-related code is also present:
+- `Auth.auth()`, `createUser`, `signIn` patterns
+- `Keychain`, `UserDefaults` storing auth tokens
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| ARKit/Vision face tracking + auth code detected | **CRITICAL** | Apps using facial recognition for account authentication must use `LocalAuthentication` framework (Face ID/Touch ID), not ARKit or Vision face tracking (§2.5.13). |
+| `LocalAuthentication` used for biometric auth | ✅ PASS | LocalAuthentication used correctly for biometric auth |
+| No face tracking + auth combination detected | ✅ N/A | Not applicable |
+
+---
+
+#### 8ab — In-App Cryptocurrency Mining (§2.4.2, §3.1.5(ii))
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS, watchOS, tvOS — applies to all platforms.
+
+Grep for cryptocurrency mining patterns:
+- `import CryptoKit` combined with hashing loops or proof-of-work patterns
+- String literals: `"mining"`, `"miner"`, `"hashrate"`, `"nonce"`, `"proof of work"`, `"blockchain mining"`
+- Heavy CPU loop patterns near crypto-related identifiers (`SHA256`, `keccak`, `scrypt`, `ethash`)
+- Background processing (`BGProcessingTask`, `beginBackgroundTask`) combined with crypto patterns
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| In-app cryptocurrency mining patterns detected (on-device processing) | **CRITICAL** | Apps may not mine cryptocurrency using the device's CPU/GPU — on-device mining is prohibited (§2.4.2, §3.1.5(ii)). Cloud-based mining services are permitted only if processing is off-device. |
+| Crypto wallet or exchange only (no mining patterns) | ✅ INFO | Cryptocurrency wallet/exchange detected — no mining violation. Ensure developer is enrolled as an organization (§3.1.5(i)). |
+| No cryptocurrency patterns detected | ✅ N/A | Not applicable |
+
+---
+
+#### 8ac — CallKit Proper Use — Spam Blocking Only (§2.5.12)
+
+> **Platforms**: iOS, iPadOS
+> *Skip for macOS, visionOS, watchOS, tvOS.*
+
+If `import CallKit` or `CXCallDirectoryExtension`, `CXCallDirectoryManager`, `CXBlockingExtension` is detected:
+
+Grep for context — is the app clearly a VoIP/calling app or a spam-blocking extension?
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| CallKit spam blocking detected + no documented spam source in metadata/strings | **WARN** | Apps using CallKit for call/SMS blocking must only block confirmed spam numbers. Clearly identify the spam-blocking feature in marketing text and disclose the criteria for the blocked/spam list (§2.5.12). |
+| CallKit data sharing patterns detected (user call data → third-party) | **CRITICAL** | Call data accessed via CallKit may not be used for tracking, profiling, or sharing with third parties (§2.5.12). |
+| CallKit VoIP usage only (not spam blocking) | ✅ INFO | CallKit used for VoIP — not subject to spam blocking restrictions. |
+| No CallKit detected | ✅ N/A | Not applicable |
 
 ---
 
@@ -1344,7 +1698,27 @@ Include a **Compliance Findings** section in the report with this table:
 | Subscription management link | §3.1.2 | ... | [e.g. "Auto-renewable subscription found — manage link missing"] |
 | Privacy policy URL in Info.plist | §5.1.1 | ... | [e.g. "NSPrivacyPolicyURL missing from Info.plist"] |
 | Placeholder content | §2.1 | ... | [e.g. "No placeholder text detected"] |
+| Family Controls entitlement | §3.3.3(Q) | ... | [reason] |
+| Foveated streaming eye-tracking disclosure | §3.3.3(B) | ... | [reason] |
+| Accessory notifications scope | §3.3.7(J) | ... | [reason] |
+| Brazil storefront A12 impact | Mar 2026 | ... | [reason] |
+| No ads in extensions/widgets/clips/watchOS | §2.5.18 | ... | [reason] |
+| macOS: App Sandbox | §2.4.5(i) | ... | [reason] |
+| macOS: No third-party updater | §2.4.5(vii) | ... | [reason] |
+| HealthKit + ad/analytics isolation | §5.1.3(i) | ... | [reason] |
+| Location + advertising separation | §5.1.5 | ... | [reason] |
+| VPN entitlement | §5.4 | ... | [reason] |
+| MDM entitlement | §5.5 | ... | [reason] |
+| Medical app disclaimer | §1.4.1 | ... | [reason] |
+| Export compliance encryption | Before You Submit | ... | [reason] |
+| Private / deprecated API usage | §2.5.1 | ... | [reason] |
+| Loot box odds disclosure | §3.1.1 | ... | [reason] |
+| Facial recognition → LocalAuthentication | §2.5.13 | ... | [reason] |
+| Cryptocurrency mining prohibition | §2.4.2 / §3.1.5(ii) | ... | [reason] |
+| CallKit proper use | §2.5.12 | ... | [reason] |
 ```
+
+> Checks skipped due to platform not being targeted appear as `⏭ SKIPPED (platform not targeted)`. Include these rows only when the check was explicitly evaluated and skipped — omit checks that simply did not trigger (N/A).
 
 🚨 = Must fix before submission | ⚠️ = Should fix | ✅ = No action needed
 
