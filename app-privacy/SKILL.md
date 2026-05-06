@@ -36,18 +36,18 @@ Follow these phases in order. Do NOT skip phases — including Phase 0.
 **Before doing anything else** — before scanning, before reading any file — ask the user:
 
 > **"How would you like the report delivered?"**
-> - **A) `.docx` only** — Professional Word document (requires `npm install -g docx`)
-> - **B) `.md` only** — Markdown report, saved to `Docs/AppPrivacyReport/APP-PRIVACY-REPORT.md` (no dependencies)
-> - **C) `.pdf` only** — Professional PDF report (requires `pip install reportlab`)
-> - **D) All three** — `.docx` + `.pdf` + `Docs/AppPrivacyReport/APP-PRIVACY-REPORT.md` (default recommendation)
+> - **A) `.docx` only** — Professional Word document (requires `npm install -g docx`; heavy token use)
+> - **B) `.md` only** — Markdown report, saved to `Docs/AppPrivacyReport/APP-PRIVACY-REPORT.md` (no dependencies, lowest token use — **recommended**)
+> - **C) `.pdf` only** — Professional PDF report (requires `pip install reportlab`; heavy token use)
+> - **D) All three** — `.docx` + `.pdf` + `Docs/AppPrivacyReport/APP-PRIVACY-REPORT.md` (highest token use)
 >
-> *(Press Enter or type "D" to get all three — recommended.)*
+> *(Press Enter or type "B" for the lightweight Markdown report — recommended. Choose A/C/D only when you specifically need a Word/PDF deliverable.)*
 
 Wait for the user's reply. Store the choice:
 - **A** → generate `.docx` only (Phase 10), skip Phase 10b and `.md` write
-- **B** → write `Docs/AppPrivacyReport/APP-PRIVACY-REPORT.md` only, skip Phase 10 and Phase 10b
+- **B** (or no answer / Enter) → write `Docs/AppPrivacyReport/APP-PRIVACY-REPORT.md` only, skip Phase 10 and Phase 10b
 - **C** → run Phase 10b (pdf only), skip Phase 10 and `.md` write
-- **D** (or no answer / Enter) → run Phase 10 (docx) + Phase 10b (pdf) + write `.md`
+- **D** → run Phase 10 (docx) + Phase 10b (pdf) + write `.md`
 
 Do **not** proceed to Phase 1 until this answer is received.
 
