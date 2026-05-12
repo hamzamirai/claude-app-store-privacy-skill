@@ -36,16 +36,16 @@ Follow these phases in order. Do NOT skip phases — including Phase 0.
 **Before doing anything else** — before scanning, before reading any file — ask the user:
 
 > **"How would you like the report delivered?"**
-> - **A) `.docx` only** — Professional Word document (requires `npm install -g docx`; heavy token use)
-> - **B) `.md` only** — Markdown report, saved to `Docs/AppPrivacyReport/APP-PRIVACY-REPORT.md` (no dependencies, lowest token use — **recommended**)
+> - **A) `.md` only** — Markdown report, saved to `Docs/AppPrivacyReport/APP-PRIVACY-REPORT.md` (no dependencies, lowest token use — **recommended**)
+> - **B) `.docx` only** — Professional Word document (requires `npm install -g docx`; heavy token use)
 > - **C) `.pdf` only** — Professional PDF report (requires `pip install reportlab`; heavy token use)
 > - **D) All three** — `.docx` + `.pdf` + `Docs/AppPrivacyReport/APP-PRIVACY-REPORT.md` (highest token use)
 >
-> *(Press Enter or type "B" for the lightweight Markdown report — recommended. Choose A/C/D only when you specifically need a Word/PDF deliverable.)*
+> *(Press Enter or type "A" for the lightweight Markdown report — recommended. Choose B/C/D only when you specifically need a Word/PDF deliverable.)*
 
 Wait for the user's reply. Store the choice:
-- **A** → generate `.docx` only (Phase 10), skip Phase 10b and `.md` write
-- **B** (or no answer / Enter) → write `Docs/AppPrivacyReport/APP-PRIVACY-REPORT.md` only, skip Phase 10 and Phase 10b
+- **A** (or no answer / Enter) → write `Docs/AppPrivacyReport/APP-PRIVACY-REPORT.md` only, skip Phase 10 and Phase 10b
+- **B** → generate `.docx` only (Phase 10), skip Phase 10b and `.md` write
 - **C** → run Phase 10b (pdf only), skip Phase 10 and `.md` write
 - **D** → run Phase 10 (docx) + Phase 10b (pdf) + write `.md`
 
@@ -1794,9 +1794,9 @@ If any files were moved, inform the user:
 #### Format Branching
 
 The format was already chosen in **Phase 0**. Recall the stored choice now and branch accordingly:
-- Choice **A** or **D** → proceed to Phase 10 (`.docx` generation)
+- Choice **B** or **D** → proceed to Phase 10 (`.docx` generation)
 - Choice **C** or **D** → proceed to Phase 10b (`.pdf` generation)
-- Choice **B** or **D** → write `Docs/AppPrivacyReport/APP-PRIVACY-REPORT.md` (8-section structure: Executive Summary, Detected SDKs & Frameworks, Privacy Declaration, Required Reason APIs, Per-Target Declaration Summary, App Store Connect Checklist, Age Rating, v2/Future Notes)
+- Choice **A** or **D** → write `Docs/AppPrivacyReport/APP-PRIVACY-REPORT.md` (8-section structure: Executive Summary, Detected SDKs & Frameworks, Privacy Declaration, Required Reason APIs, Per-Target Declaration Summary, App Store Connect Checklist, Age Rating, v2/Future Notes)
 
 > If for any reason Phase 0 was skipped (e.g. the skill was invoked mid-conversation without the user seeing the question), **stop here and ask now** before writing any files. The format question is never optional.
 
