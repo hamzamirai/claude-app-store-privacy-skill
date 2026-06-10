@@ -119,6 +119,9 @@ import FoveatedRendering
 import FamilyControls
 import AccessorySetupKit
 import AccessoryNotifications
+import SensitiveContentAnalysis
+import ActivityKit
+import CoreMediaIO
 import CoreML
 import NaturalLanguage
 import LocalAuthentication
@@ -171,6 +174,24 @@ api.cohere.com
 api.perplexity.ai
 aiplatform.googleapis.com
 firebaseai.googleapis.com
+```
+
+Also grep for new June 2026 framework patterns in any `.swift` file:
+```
+SCSensitivityAnalyzer
+SCSensitivityAnalysis
+CMIOExtensionProvider
+CMIOExtensionDevice
+CMIOExtensionStream
+ActivityAttributes
+ActivityContent
+Activity<
+AppShortcutsProvider
+AppShortcut(
+TrustInsights
+TrustSignal
+kAudioUnitType_SpatialMixer
+AVAudioUnitComponent
 ```
 
 2. **Record** every unique import found with the file path where it was detected.
@@ -298,7 +319,7 @@ firebaseai.googleapis.com
 | `TVUserManager` | Multi-user profile management |
 | `TVTopShelfContentProvider` | Top Shelf content (may use user data) |
 
-#### Family Controls / Screen Time (iOS — §3.3.3(Q))
+#### Family Controls / Screen Time (iOS — §3.3.3)
 | Pattern | Implication |
 |---------|-------------|
 | `AuthorizationCenter.shared.requestAuthorization` | Family Controls permission request |
@@ -465,7 +486,7 @@ Apply the following knowledge base to map each detected SDK/framework to Apple's
 
 > Ask user: "Are contacts uploaded to a server or used only on-device?"
 
-#### Family Controls (FamilyControls — §3.3.3(Q))
+#### Family Controls (FamilyControls — §3.3.3)
 | Data Type | Linked | Tracking | Purpose |
 |-----------|--------|----------|---------|
 | App Usage Data | Yes | No | App Functionality |
@@ -1269,13 +1290,15 @@ Then **verify moderation and abuse reporting** by grepping for:
 
 | Result | Severity | Finding |
 |--------|----------|---------|
-| UGC/chat detected + no moderation/reporting found | **WARN** | Apps with UGC or chat must provide content moderation and abuse reporting (§1.2) |
+| UGC/chat detected + no moderation/reporting found | **WARN** | Apps with UGC or chat must provide content moderation and abuse reporting. Under the updated §1.2, developers are explicitly responsible for the consequences of content that violates this guideline — not just for providing reporting tools. Ensure your moderation policy and enforcement process can demonstrate active responsibility (§1.2). |
 | UGC/chat detected + moderation found | ✅ PASS | Content moderation present |
 | No UGC/chat detected | ✅ N/A | Not required |
 
 #### 8h — Kids Category Restrictions (§1.3)
 
 > **Platforms**: iOS, iPadOS, macOS, visionOS, watchOS, tvOS — per §1.3, Kids category restrictions apply across all App Store platforms.
+
+Per the revised App Review Guidelines Introduction and §1.3, restrictions apply to both Kids category apps and apps that knowingly target teens.
 
 If **HealthKit**, **CNContactStore**, **GoogleMobileAds**, or **FacebookCore** is detected, AND the app name/bundle ID contains `kids`, `child`, `children`, `junior`, `baby`, `toddler`, or `family`:
 
@@ -1290,6 +1313,7 @@ Also check for **third-party analytics SDKs** alongside kids-category indicators
 | Kids-category app + Contacts detected | **CRITICAL** | Contacts framework is not permitted in Kids category apps (§1.3) |
 | Kids-category app + ad SDK detected | **CRITICAL** | Third-party advertising SDKs (AdMob, Facebook Ads) are banned in Kids category (§1.3) |
 | Kids-category app + third-party analytics SDK detected | **CRITICAL** | Third-party analytics SDKs are not permitted in Kids category apps (§5.1.4(a)). Remove or replace with Apple's first-party alternatives. |
+| Kids/teen-targeted app + no age verification mechanism | **WARN** | Apps targeting minors should implement appropriate age verification or parental consent flows per §7.9 (App Store Connect minor protection requirements). |
 | No kids indicators | ✅ N/A | Kids category restrictions do not apply |
 
 #### 8i — Subscription Management Link (§3.1.2)
@@ -1340,7 +1364,7 @@ Also grep `.swift` files for UI strings matching these patterns.
 | Placeholder strings found in localization | **WARN** | Placeholder or incomplete text found — remove before submission (§2.1 requires complete app) |
 | No placeholders found | ✅ PASS | No obvious placeholder content detected |
 
-#### 8l — Family Controls Entitlement (§3.3.3(Q))
+#### 8l — Family Controls Entitlement (§3.3.3)
 
 > **Platforms**: iOS, iPadOS only
 > *Skip for macOS, visionOS, watchOS, tvOS — FamilyControls framework is not available on these platforms.*
@@ -1349,9 +1373,11 @@ If `FamilyControls` is imported **or** `AuthorizationCenter.shared.requestAuthor
 
 - Grep all `.entitlements` files for `com.apple.developer.family-controls`.
 
+> Note: The June 2026 DPLA update reassigned §3.3.3(Q) to the Suggested Actions API. Family Controls compliance is still required — refer to the current Developer Program License Agreement for the specific subsection letter.
+
 | Result | Severity | Finding |
 |--------|----------|---------|
-| FamilyControls detected + entitlement missing | **CRITICAL** | `com.apple.developer.family-controls` entitlement is required and must be approved by Apple before submission (§3.3.3(Q)) |
+| FamilyControls detected + entitlement missing | **CRITICAL** | `com.apple.developer.family-controls` entitlement is required and must be approved by Apple before submission. Note: The section letter for this requirement changed in the June 2026 DPLA update — refer to the current agreement for the specific subsection. |
 | FamilyControls detected + entitlement present | ✅ PASS | Family Controls entitlement configured |
 | FamilyControls + Kids-category indicators detected | **WARN** | Family monitoring apps should not target the Kids category — App Store review may reject |
 
@@ -1675,6 +1701,159 @@ Grep for context — is the app clearly a VoIP/calling app or a spam-blocking ex
 
 ---
 
+#### 8ad — SensitiveContentAnalysis Framework (§3.3.3(N))
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS
+> *Skip for watchOS, tvOS.*
+
+§3.3.3(N) specifies requirements for use of the Sensitive Content Analysis framework (for detecting nudity or other sensitive imagery).
+
+Detect: `import SensitiveContentAnalysis`, `SCSensitivityAnalyzer`, `SCSensitivityAnalysis`
+
+- Grep all `.entitlements` files for `com.apple.developer.sensitivecontentanalysis.client`.
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| SensitiveContentAnalysis detected + entitlement missing | **CRITICAL** | The `SensitiveContentAnalysis` framework requires the `com.apple.developer.sensitivecontentanalysis.client` entitlement, which must be approved by Apple before submission (§3.3.3(N)). |
+| SensitiveContentAnalysis detected + entitlement present | ✅ PASS | SensitiveContentAnalysis entitlement configured |
+| No SensitiveContentAnalysis detected | ✅ N/A | Not applicable |
+
+---
+
+#### 8ae — Suggested Actions API (§3.3.3(Q))
+
+> **Platforms**: iOS, iPadOS, macOS
+> *Skip for watchOS, tvOS, visionOS.*
+
+§3.3.3(Q) in the June 2026 DPLA update now refers to the Suggested Actions API (previously this letter covered Family Controls — see check 8l for the updated Family Controls reference).
+
+Detect: `AppShortcutsProvider`, `AppShortcut(`, donation of `AppIntents` shortcuts, `suggestedActions` patterns.
+
+If Suggested Actions expose user data (contacts, calendar events, location) in action parameters, check that those data types are declared in PrivacyInfo.xcprivacy.
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Suggested Actions detected + user data (contacts/location/calendar) in action parameters + not declared in privacy manifest | **WARN** | Suggested Actions that surface user data must be declared as collected data types in PrivacyInfo.xcprivacy (§3.3.3(Q)). |
+| Suggested Actions detected + data properly declared or no user data exposed | ✅ PASS | Suggested Actions usage compliant |
+| No Suggested Actions detected | ✅ N/A | Not applicable |
+
+---
+
+#### 8af — Trust Insights Framework (§3.3.3(R))
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS
+> *Skip for watchOS, tvOS.*
+
+§3.3.3(R) specifies requirements for use of the Trust Insights framework for evaluating device and app trust signals (new in the June 2026 DPLA).
+
+Detect: `TrustInsights`, `TrustSignal`, `DeviceTrust` patterns, or `DCAppAttestService` combined with trust evaluation logic.
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Trust Insights / device attestation patterns detected + trust data sent to a third-party server | **WARN** | Trust signals collected via the Trust Insights framework may not be shared with third parties for purposes beyond the app's core functionality (§3.3.3(R)). |
+| Trust Insights detected + used only for first-party integrity checks | ✅ PASS | Trust Insights usage compliant |
+| No Trust Insights patterns detected | ✅ N/A | Not applicable |
+
+---
+
+#### 8ag — Media Device Extension (§3.3.7(L))
+
+> **Platforms**: macOS only
+> *Skip for iOS, iPadOS, visionOS, watchOS, tvOS — Media Device Extensions (CoreMediaIO) are macOS-only.*
+
+§3.3.7(L) covers the Media Device Extension framework used for virtual camera and audio device extensions (e.g., virtual camera sources via CoreMediaIO).
+
+Detect: `import CoreMediaIO`, `CMIOExtensionProvider`, `CMIOExtensionDevice`, `CMIOExtensionStream`, or a principal class in `NSExtension` dict with `CMIOExtension` references in `Info.plist`.
+
+- Grep the macOS `.entitlements` file for `com.apple.developer.avfoundation.multitasking-camera-access` or `com.apple.security.device.camera`.
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| CoreMediaIO extension detected + camera/device entitlement missing from macOS target | **CRITICAL** | Media Device Extensions require the appropriate camera or device access entitlement and must comply with §3.3.7(L). Add the required entitlement to the macOS target. |
+| CoreMediaIO extension detected + entitlement present | ✅ PASS | Media Device Extension entitlement configured |
+| No CoreMediaIO extension detected | ✅ N/A | Not applicable |
+
+---
+
+#### 8ah — Spatial Audio Extension APIs (§3.3.7(M))
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS
+> *Skip for watchOS, tvOS.*
+
+§3.3.7(M) specifies requirements for use of the Spatial Audio Extension APIs for custom spatial audio processing (new in the June 2026 DPLA).
+
+Detect: Audio Unit extension principal classes with spatial audio type tags, `AVAudioUnitComponent` with spatial category, `kAudioUnitType_SpatialMixer`, or Spatial Audio Extension manifest keys in `Info.plist`.
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Spatial Audio Extension detected + AU extension not registered in Info.plist with correct component type | **WARN** | Spatial Audio Extensions must be properly registered as Audio Unit components per §3.3.7(M). Verify the AU extension Info.plist includes the correct `AudioComponents` dictionary with component type, subtype, and manufacturer codes. |
+| Spatial Audio Extension detected + properly registered | ✅ PASS | Spatial Audio Extension registered correctly |
+| No Spatial Audio Extension detected | ✅ N/A | Not applicable |
+
+---
+
+#### 8ai — Customer Engagement APIs (§3.3.9(E))
+
+> **Platforms**: iOS, iPadOS
+> *Skip for macOS, visionOS, watchOS, tvOS.*
+
+§3.3.9(E) specifies requirements for use of Customer Engagement APIs (App Store-integrated engagement and re-engagement capabilities, new in the June 2026 DPLA).
+
+Detect: `com.apple.developer.usernotifications.push-to-start` entitlement, App Store promotional push token registration patterns, or StoreKit-based engagement API usage.
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Customer Engagement API patterns detected + used for unsolicited promotional messages (non-customers) | **WARN** | Customer Engagement APIs (§3.3.9(E)) may only be used to re-engage existing customers — not for unsolicited marketing to non-users. |
+| Customer Engagement APIs detected + used appropriately for existing customers | ✅ PASS | Customer Engagement API usage compliant |
+| No Customer Engagement API patterns detected | ✅ N/A | Not applicable |
+
+---
+
+#### 8aj — Live Activities: No Spam / Phishing / Unsolicited Messages (§4.5.3)
+
+> **Platforms**: iOS, iPadOS
+> *Skip for macOS, visionOS, watchOS, tvOS — ActivityKit Live Activities are iOS/iPadOS only.*
+
+§4.5.3 now explicitly states that Live Activities may not be used to spam, phish, or send unsolicited messages to customers.
+
+Detect: `import ActivityKit`, `Activity<`, `ActivityAttributes`, `ActivityContent`, `LiveActivity`.
+
+If Live Activities are detected:
+1. Grep for promotional or marketing strings inside `ActivityAttributes` struct definitions or `ContentState` types: `"discount"`, `"offer"`, `"limited time"`, `"click here"`, `"exclusive deal"`, `"subscribe now"`, `"buy now"`
+2. Grep for URL schemes or external deeplinks embedded in Live Activity content payloads
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Live Activities detected + promotional/offer strings found in ContentState or ActivityAttributes | **CRITICAL** | Live Activities must not be used for promotional spam, phishing, or unsolicited offers (§4.5.3). Remove marketing content from ActivityAttributes/ContentState. |
+| Live Activities detected + deeplink-only payloads with no promotional text | ✅ INFO | Live Activities appear content-appropriate — verify the activity is user-initiated and relevant to an active session (§4.5.3). |
+| Live Activities detected + no promotional indicators found | ✅ PASS | Live Activities usage appears compliant with §4.5.3 |
+| No Live Activities detected | ✅ N/A | Not applicable |
+
+---
+
+#### 8ak — Foundation Models: Updated License Requirements (§3.3.11 / §3.3.11(A))
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS
+> *Skip for watchOS, tvOS — Foundation Models framework is not available on these platforms.*
+
+§3.3.11 groups all AI and machine learning technologies under a new subsection. §3.3.11(A) updates requirements for the Foundation Models framework, and §3.2(h) updates terms for use of and access to Apple models.
+
+Detect: `import FoundationModels`, `LanguageModelSession`, `SystemLanguageModel`, `LanguageModelSession.default`.
+
+Verify:
+1. Grep for strings falsely attributing AI outputs to human expertise: `"written by a doctor"`, `"human expert"`, `"certified professional"`, `"physician-reviewed"`
+2. Grep for `generate` / `generateContent` results being stored or transmitted off-device without disclosure in the privacy policy
+3. Confirm Foundation Models is listed in the AI providers table produced in Phase 8
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Foundation Models detected + output falsely attributed to human or professional expertise | **CRITICAL** | Foundation Models outputs must not be presented as human-generated or as professional (medical, legal, financial) advice without a disclaimer (§3.3.11(A), §1.4.1). |
+| Foundation Models detected + generated content transmitted to your servers without privacy disclosure | **WARN** | Foundation Models processes on-device. If generated content is transmitted off-device, declare this data flow in your privacy policy and PrivacyInfo.xcprivacy per §3.3.11(A) and §3.2(h). |
+| Foundation Models used on-device only + no misleading attribution claims | ✅ PASS | Foundation Models usage compliant with §3.3.11(A) |
+| No Foundation Models detected | ✅ N/A | Not applicable |
+
+---
+
 #### Compliance Summary Output
 
 Include a **Compliance Findings** section in the report with this table:
@@ -1698,7 +1877,7 @@ Include a **Compliance Findings** section in the report with this table:
 | Subscription management link | §3.1.2 | ... | [e.g. "Auto-renewable subscription found — manage link missing"] |
 | Privacy policy URL in Info.plist | §5.1.1 | ... | [e.g. "NSPrivacyPolicyURL missing from Info.plist"] |
 | Placeholder content | §2.1 | ... | [e.g. "No placeholder text detected"] |
-| Family Controls entitlement | §3.3.3(Q) | ... | [reason] |
+| Family Controls entitlement | §3.3.3 | ... | [reason] |
 | Foveated streaming eye-tracking disclosure | §3.3.3(B) | ... | [reason] |
 | Accessory notifications scope | §3.3.7(J) | ... | [reason] |
 | Brazil storefront A12 impact | Mar 2026 | ... | [reason] |
@@ -1716,6 +1895,14 @@ Include a **Compliance Findings** section in the report with this table:
 | Facial recognition → LocalAuthentication | §2.5.13 | ... | [reason] |
 | Cryptocurrency mining prohibition | §2.4.2 / §3.1.5(ii) | ... | [reason] |
 | CallKit proper use | §2.5.12 | ... | [reason] |
+| SensitiveContentAnalysis entitlement | §3.3.3(N) | ... | [reason] |
+| Suggested Actions privacy disclosure | §3.3.3(Q) | ... | [reason] |
+| Trust Insights data handling | §3.3.3(R) | ... | [reason] |
+| Media Device Extension entitlement | §3.3.7(L) | ... | [reason] |
+| Spatial Audio Extension registration | §3.3.7(M) | ... | [reason] |
+| Customer Engagement APIs usage | §3.3.9(E) | ... | [reason] |
+| Live Activities: no spam/phishing | §4.5.3 | ... | [reason] |
+| Foundation Models license compliance | §3.3.11(A) | ... | [reason] |
 ```
 
 > Checks skipped due to platform not being targeted appear as `⏭ SKIPPED (platform not targeted)`. Include these rows only when the check was explicitly evaluated and skipped — omit checks that simply did not trigger (N/A).
