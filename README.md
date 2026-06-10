@@ -78,7 +78,7 @@ Firebase (Analytics, Auth, Crashlytics, Firestore, Storage, Messaging, Remote Co
 Adjust, AppsFlyer, Branch, Singular, Kochava
 
 ### Platform Frameworks
-HealthKit, CoreLocation, Contacts, ARKit, RealityKit, AVFoundation, PhotosUI, Speech, LocalAuthentication, UserNotifications, PassKit, AdSupport, AppTrackingTransparency, CloudKit, CoreData, SwiftData
+HealthKit, CoreLocation, Contacts, ARKit, RealityKit, AVFoundation, PhotosUI, Speech, LocalAuthentication, UserNotifications, PassKit, AdSupport, AppTrackingTransparency, CloudKit, CoreData, SwiftData, SensitiveContentAnalysis, ActivityKit, CoreMediaIO
 
 ### AI & Machine Learning
 Apple Intelligence (Foundation Models, Writing Tools, Image Playground), OpenAI (GPT-4 / GPT-4o), Google Gemini (free tier), Firebase AI / Gemini (paid tier, formerly Vertex AI for Firebase), Anthropic Claude, Mistral, Groq, Cohere, Perplexity, CoreML, NaturalLanguage
@@ -91,7 +91,7 @@ tvOS: TVUserManager, TVTopShelfContentProvider
 
 ## App Store Compliance Checks
 
-Beyond privacy declarations, the skill also runs these pre-submission checks:
+Beyond privacy declarations, the skill also runs 37 pre-submission checks:
 
 | Check | Guideline | What It Verifies |
 |-------|-----------|-----------------|
@@ -104,6 +104,37 @@ Beyond privacy declarations, the skill also runs these pre-submission checks:
 | Third-party AI disclosure | §5.1.2(i) | Cloud AI usage → must disclose to users |
 | Gemini free tier training | §5.1.2(i) | Free tier trains on data — disclose or upgrade |
 | Chatbot age restriction | §4.7.5 | AI chat features need age-restriction mechanisms |
+| UGC safety | §1.2 | Chat/UGC detected → moderation + developer responsibility |
+| Kids/teen category restrictions | §1.3 | Banned APIs, analytics, and age verification |
+| Subscription management link | §3.1.2 | Auto-renewable subscription → manage/cancel flow |
+| Privacy policy URL | §5.1.1 | NSPrivacyPolicyURL in Info.plist |
+| Placeholder content | §2.1 | No TODO/Lorem ipsum before submission |
+| Family Controls entitlement | §3.3.3 | FamilyControls → Apple-approved entitlement required |
+| Foveated streaming disclosure | §3.3.3(B) | Eye tracking data must be declared |
+| Accessory notifications scope | §3.3.7(J) | System-managed accessory setup verification |
+| Brazil storefront A12 | Mar 2026 | Advertising/chat apps auto-rated A12 in Brazil |
+| No ads in extensions/widgets/watchOS | §2.5.18 | Ads only in main app binary |
+| macOS: App Sandbox | §2.4.5(i) | Sandbox entitlement required for Mac App Store |
+| macOS: No third-party updater | §2.4.5(vii) | Sparkle/DevMateKit prohibited |
+| HealthKit + ad/analytics isolation | §5.1.3(i) | Health data must not power ad targeting |
+| Location + advertising separation | §5.1.5 | Location data not allowed for ad targeting |
+| VPN entitlement | §5.4 | NetworkExtension → Apple-approved entitlement |
+| MDM entitlement | §5.5 | MDM restricted to enterprise/educational use |
+| Medical app disclaimer | §1.4.1 | HealthKit/medical terms → consult-doctor disclaimer |
+| Export compliance encryption | Before You Submit | ITSAppUsesNonExemptEncryption in Info.plist |
+| Private / deprecated API usage | §2.5.1 | No private frameworks, UIWebView, UIAlertView |
+| Loot box odds disclosure | §3.1.1 | Randomized IAP → odds must be disclosed |
+| Facial recognition → LocalAuthentication | §2.5.13 | ARKit face tracking + auth → use LocalAuthentication |
+| Cryptocurrency mining | §2.4.2 / §3.1.5(ii) | On-device crypto mining prohibited |
+| CallKit proper use | §2.5.12 | Call data not shared with third parties |
+| SensitiveContentAnalysis entitlement | §3.3.3(N) | Sensitive Content Analysis → Apple-approved entitlement |
+| Suggested Actions privacy disclosure | §3.3.3(Q) | Suggested Actions exposing user data → privacy manifest |
+| Trust Insights data handling | §3.3.3(R) | Trust signals not shared with third parties |
+| Media Device Extension entitlement | §3.3.7(L) | CoreMediaIO extensions → camera entitlement required |
+| Spatial Audio Extension registration | §3.3.7(M) | Spatial AU extensions must declare AudioComponents |
+| Customer Engagement APIs | §3.3.9(E) | Engagement APIs for existing customers only |
+| Live Activities: no spam/phishing | §4.5.3 | Live Activities must not contain promotional/spam content |
+| Foundation Models license compliance | §3.3.11(A) | Foundation Models outputs not falsely attributed to humans |
 
 ## AI Privacy Features
 
@@ -139,7 +170,7 @@ When AI SDKs are detected, the skill:
 ## Age Rating: 4+
 
 ## AI Providers Detected: Apple Intelligence (on-device), OpenAI
-## Compliance: 8/9 checks passed — 1 WARN (account deletion not found)
+## Compliance: 36/37 checks passed — 1 WARN (account deletion not found)
 ```
 
 ## Limitations
