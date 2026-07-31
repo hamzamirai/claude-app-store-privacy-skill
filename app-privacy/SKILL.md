@@ -122,6 +122,9 @@ import AccessoryNotifications
 import SensitiveContentAnalysis
 import ActivityKit
 import CoreMediaIO
+import PassKit
+import EnergyKit
+import DeclaredAgeRange
 import CoreML
 import NaturalLanguage
 import LocalAuthentication
@@ -192,6 +195,17 @@ TrustInsights
 TrustSignal
 kAudioUnitType_SpatialMixer
 AVAudioUnitComponent
+PKPass
+PKPassLibrary
+PKAddPassesViewController
+PKPaymentPass
+EnergyKit
+EnergyKitManager
+DeclaredAgeRange
+AgeRangeService
+requestAgeRange
+adjustsFontForContentSizeCategory
+accessibilityIgnoresInvertColors
 ```
 
 2. **Record** every unique import found with the file path where it was detected.
@@ -1232,11 +1246,13 @@ If **StoreKit** (`SKPaymentQueue`, `Product.products`, `Transaction.currentEntit
 | IAP detected + restore found | ✅ PASS | Restore is implemented |
 | No IAP detected | ✅ N/A | Not required |
 
-#### 8e — External Payment for Digital Goods (§3.1.1)
+#### 8e — External Payment for Digital Goods (§3.1.1, Attachment 2 §1.1)
 
 > **Platforms**: iOS, iPadOS, macOS, visionOS, tvOS
 > *Skip for watchOS — watchOS has no independent payment flows.*
 > Note for macOS: §3.1.1 applies to Mac App Store distributions; the skill targets App Store submissions only.
+
+Attachment 2 §1.1 of the DPLA clarifies the requirements for use of the In-App Purchase API: digital content, functionality, and services delivered inside the app must be sold through the In-App Purchase API.
 
 Grep for external payment processors being used:
 - `import Stripe`, `STPPaymentContext`, `STPPaymentHandler`
@@ -1248,7 +1264,7 @@ If detected, check if the app's context is **physical goods** (food delivery, e-
 
 | Result | Severity | Finding |
 |--------|----------|---------|
-| External payment + digital goods context | **CRITICAL** | External payment for digital goods violates §3.1.1. Use StoreKit/IAP instead. |
+| External payment + digital goods context | **CRITICAL** | External payment for digital goods violates §3.1.1 and the In-App Purchase API requirements in Attachment 2 §1.1. Use StoreKit/IAP instead. |
 | External payment + physical goods context | **INFO** | Allowed for physical goods — verify context is correct. |
 
 > Ask the user: "I detected Stripe/PayPal. Does this app sell physical goods (allowed) or digital content/subscriptions (must use StoreKit)?"
@@ -1313,7 +1329,7 @@ Also check for **third-party analytics SDKs** alongside kids-category indicators
 | Kids-category app + Contacts detected | **CRITICAL** | Contacts framework is not permitted in Kids category apps (§1.3) |
 | Kids-category app + ad SDK detected | **CRITICAL** | Third-party advertising SDKs (AdMob, Facebook Ads) are banned in Kids category (§1.3) |
 | Kids-category app + third-party analytics SDK detected | **CRITICAL** | Third-party analytics SDKs are not permitted in Kids category apps (§5.1.4(a)). Remove or replace with Apple's first-party alternatives. |
-| Kids/teen-targeted app + no age verification mechanism | **WARN** | Apps targeting minors should implement appropriate age verification or parental consent flows per §7.9 (App Store Connect minor protection requirements). |
+| Kids/teen-targeted app + no age verification mechanism | **WARN** | Apps targeting minors should implement appropriate age verification or parental consent flows — see check 8ap for the full age assurance evaluation (§7.9). |
 | No kids indicators | ✅ N/A | Kids category restrictions do not apply |
 
 #### 8i — Subscription Management Link (§3.1.2)
@@ -1586,18 +1602,25 @@ If **HealthKit** is detected, or medical terminology is found in localization st
 
 ---
 
-#### 8x — Export Compliance: Encryption Declaration (Required Before Submission)
+#### 8x — Export Compliance and Developer Identity (§3.1, §14.8)
 
 > **Platforms**: iOS, iPadOS, macOS, visionOS, watchOS, tvOS — required for all apps.
+
+§3.1 and §14.8 specify the developer's obligation to provide information and respond to Apple's questions about developer identity, including in the context of export compliance. The June 2026 DPLA update made these requirements explicit.
 
 Grep all `Info.plist` files for:
 - `ITSAppUsesNonExemptEncryption`
 
+Also grep for custom or proprietary cryptography that would make the app non-exempt: `CommonCrypto`, `CCCrypt`, `import CryptoKit` with custom key derivation, `OpenSSL`, `libsodium`, `BoringSSL`, or a bundled `.dylib` implementing encryption.
+
 | Result | Severity | Finding |
 |--------|----------|---------|
-| `ITSAppUsesNonExemptEncryption` key missing from Info.plist | **WARN** | Apple requires all apps to declare their encryption usage — add `ITSAppUsesNonExemptEncryption` to `Info.plist`. Set to `NO` if the app only uses standard HTTPS/TLS. Set to `YES` if it uses custom or proprietary encryption, and complete the encryption documentation in App Store Connect. |
-| `ITSAppUsesNonExemptEncryption` = `YES` detected | **INFO** | App declares non-exempt encryption. Ensure the Encryption Documentation section in App Store Connect is completed and an ERN (Encryption Registration Number) is obtained if required. |
+| `ITSAppUsesNonExemptEncryption` key missing from Info.plist | **WARN** | Apple requires all apps to declare their encryption usage — add `ITSAppUsesNonExemptEncryption` to `Info.plist`. Set to `NO` if the app only uses standard HTTPS/TLS. Set to `YES` if it uses custom or proprietary encryption, and complete the encryption documentation in App Store Connect (§3.1, §14.8). |
+| `ITSAppUsesNonExemptEncryption` = `NO` but custom crypto library detected (OpenSSL, libsodium, bundled crypto dylib) | **CRITICAL** | The encryption declaration contradicts the detected cryptography. A false export compliance declaration violates §3.1 and §14.8. Set the key to `YES` and complete the encryption documentation, or remove the non-exempt cryptography. |
+| `ITSAppUsesNonExemptEncryption` = `YES` detected | **INFO** | App declares non-exempt encryption. Ensure the Encryption Documentation section in App Store Connect is completed and an ERN (Encryption Registration Number) is obtained if required. Under §14.8 you must respond to Apple's follow-up questions about export compliance and developer identity. |
 | `ITSAppUsesNonExemptEncryption` = `NO` present | ✅ PASS | Encryption declaration present |
+
+> Reminder for the report: §3.1 and §14.8 also require the developer to keep account identity details (legal entity name, address, trader status, D-U-N-S) accurate in App Store Connect and to respond promptly to Apple's requests for identity information. This cannot be verified from source — it appears in the Pre-Submission Checklist.
 
 ---
 
@@ -1844,13 +1867,152 @@ Verify:
 1. Grep for strings falsely attributing AI outputs to human expertise: `"written by a doctor"`, `"human expert"`, `"certified professional"`, `"physician-reviewed"`
 2. Grep for `generate` / `generateContent` results being stored or transmitted off-device without disclosure in the privacy policy
 3. Confirm Foundation Models is listed in the AI providers table produced in Phase 8
+4. Grep for Apple model outputs being used to train, fine-tune, benchmark, or improve a separate model: `trainingData`, `fineTune`, `distill`, `syntheticDataset`, or generated text written to a dataset file (`.jsonl`, `training`, `corpus`)
 
 | Result | Severity | Finding |
 |--------|----------|---------|
 | Foundation Models detected + output falsely attributed to human or professional expertise | **CRITICAL** | Foundation Models outputs must not be presented as human-generated or as professional (medical, legal, financial) advice without a disclaimer (§3.3.11(A), §1.4.1). |
+| Apple model outputs used to train, fine-tune, or improve another model | **CRITICAL** | §3.2(h) restricts use of and access to Apple models. Output from Apple models may not be used to create, train, or improve a separate machine learning model. Remove the training/distillation pipeline. |
 | Foundation Models detected + generated content transmitted to your servers without privacy disclosure | **WARN** | Foundation Models processes on-device. If generated content is transmitted off-device, declare this data flow in your privacy policy and PrivacyInfo.xcprivacy per §3.3.11(A) and §3.2(h). |
+| Apple models accessed + no dataset export or retraining pipeline detected | ✅ PASS | Apple model access terms observed (§3.2(h)) |
 | Foundation Models used on-device only + no misleading attribution claims | ✅ PASS | Foundation Models usage compliant with §3.3.11(A) |
 | No Foundation Models detected | ✅ N/A | Not applicable |
+
+---
+
+#### 8al — Accessibility Content Modification (§3.3.4(A))
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS, watchOS, tvOS — per §3.3.4(A), applies to all platforms.
+
+§3.3.4(A) specifies that end users must be able to modify content for personal accessibility purposes. An app may not block or defeat the system accessibility features that perform that modification (new in the June 2026 DPLA).
+
+Detect: patterns that suppress or override system accessibility behavior.
+
+- Grep all `.swift` files for Dynamic Type opt-outs:
+  - `adjustsFontForContentSizeCategory = false`
+  - `.font(.system(size:` **without** a paired `relativeTo:` argument
+  - `UIFont.systemFont(ofSize:` / `NSFont.systemFont(ofSize:` applied to user-facing labels
+  - `.dynamicTypeSize(.` with a fixed single value (rather than a range) clamping user preference
+- Grep for content hidden from assistive technology:
+  - `.accessibilityHidden(true)` applied to a container that holds primary content
+  - `isAccessibilityElement = false` on a content view
+  - `.accessibilityElement(children: .ignore)` on a text-bearing container
+- Grep for appearance overrides that defeat user settings:
+  - `accessibilityIgnoresInvertColors` on primary content (legitimate on photos/media, suspect on text)
+  - `.preferredColorScheme(` forced app-wide with no user setting to change it
+  - `UIAccessibility.isReduceMotionEnabled` read but not honored (animation runs regardless)
+- Grep for feature gating: `UIAccessibility.isVoiceOverRunning` used to disable rather than adapt a feature
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| VoiceOver detected as a condition that disables a feature or blocks content access | **CRITICAL** | §3.3.4(A) requires that end users be able to modify content for personal accessibility purposes. Do not disable functionality when an assistive technology is active — adapt the presentation instead. |
+| Primary content hidden from assistive technology (`accessibilityHidden(true)` / `isAccessibilityElement = false` on content containers) | **CRITICAL** | Hiding primary content from assistive technology prevents accessibility modification (§3.3.4(A)). Reserve these APIs for decorative elements only. |
+| Dynamic Type disabled (`adjustsFontForContentSizeCategory = false`) or fixed point sizes used throughout user-facing text | **WARN** | Fixed font sizes prevent users from scaling text for personal accessibility needs (§3.3.4(A)). Use `.font(.system(size:relativeTo:))` or a semantic text style so text responds to the user's Dynamic Type setting. |
+| `accessibilityIgnoresInvertColors` applied to text or primary UI (not photos/media) | **WARN** | Overriding Smart Invert on primary content defeats a user accessibility setting (§3.3.4(A)). Limit this modifier to images and media where inversion would misrepresent content. |
+| Reduce Motion read but animations run unconditionally, or a color scheme is forced app-wide with no user override | **WARN** | Honor `isReduceMotionEnabled` and provide an in-app appearance setting so users can modify presentation for accessibility (§3.3.4(A)). |
+| Dynamic Type, assistive-technology access, and appearance settings all honored | ✅ PASS | Accessibility content modification supported (§3.3.4(A)) |
+| No accessibility-blocking patterns detected | ✅ N/A | Not applicable |
+
+---
+
+#### 8am — Passes Privacy Requirements (Attachment 5, §3.3)
+
+> **Platforms**: iOS, iPadOS, watchOS, visionOS
+> *Skip for macOS, tvOS — Wallet passes are not distributed on these platforms.*
+
+Attachment 5 §3.3 sets updated privacy requirements for the use of Passes (Wallet passes: boarding passes, tickets, loyalty cards, coupons).
+
+Detect: `import PassKit` combined with `PKPass`, `PKPassLibrary`, `PKAddPassesViewController`, `PKPaymentPass`, `PKSecureElementPass`, or `.pkpass` file references.
+
+> Note: `PKPaymentAuthorizationController` / `PKPaymentRequest` alone indicate Apple Pay, not Passes — Apple Pay is covered by the Phase 4 SDK mapping, not this check.
+
+Verify:
+1. Grep for pass identifiers being read and then transmitted: `serialNumber`, `passTypeIdentifier`, `authenticationToken`, `deviceLibraryIdentifier` appearing near a network call or analytics event
+2. Grep for `PKPassLibrary().passes()` — enumerating the user's full pass library rather than reading only the app's own passes
+3. Confirm any pass data collected is declared in `PrivacyInfo.xcprivacy` and in the App Store Connect privacy answers
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Pass serial numbers, authentication tokens, or pass payload fields transmitted to a third-party analytics or advertising endpoint | **CRITICAL** | Attachment 5 §3.3 prohibits sharing pass data with third parties for advertising, tracking, or profiling. Restrict pass data to the first-party service that issued the pass. |
+| `PKPassLibrary().passes()` enumerates the entire pass library (not filtered to your own `passTypeIdentifier`) | **CRITICAL** | Reading passes issued by other developers exceeds the permitted scope of Attachment 5 §3.3. Filter to your own pass type identifier using `passes(of:)`. |
+| Pass data collected or stored but not declared in PrivacyInfo.xcprivacy / App Store Connect | **WARN** | Data derived from Passes must be disclosed in your privacy declarations under the updated Attachment 5 §3.3 requirements. |
+| Passes used with first-party data flow only + declared in privacy manifest | ✅ PASS | Passes privacy requirements satisfied (Attachment 5 §3.3) |
+| No PassKit pass usage detected | ✅ N/A | Not applicable |
+
+---
+
+#### 8an — EnergyKit Identity Guidelines (Attachment 11, §4)
+
+> **Platforms**: iOS, iPadOS, macOS
+> *Skip for watchOS, tvOS, visionOS.*
+
+Attachment 11 §4 governs the identity guidelines that apply to apps using EnergyKit (Apple's framework for grid-aware energy scheduling and charging). The June 2026 update renamed the applicable identity guidelines document.
+
+Detect: `import EnergyKit`, `EnergyKitManager`, `EnergyScheduler`, `com.apple.developer.energykit` in any `.entitlements` file.
+
+Verify:
+1. Grep for the EnergyKit entitlement in all `.entitlements` files — EnergyKit requires an Apple-approved entitlement
+2. Grep user-facing strings and `Localizable.xcstrings` for energy-feature attribution: confirm Apple naming is used correctly and the app does not imply Apple endorsement or utility-provider partnership it does not have
+3. Check that energy or grid data obtained through EnergyKit is not repurposed for advertising or profiling
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| EnergyKit detected + `com.apple.developer.energykit` entitlement missing | **CRITICAL** | EnergyKit requires an Apple-approved entitlement before submission. Request it in the developer account and add it to the target's entitlements file (Attachment 11 §4). |
+| EnergyKit UI strings imply Apple endorsement or partnership, or use Apple marks incorrectly | **WARN** | Energy feature naming and attribution must follow Apple's identity guidelines as referenced in Attachment 11 §4. Review the current guidelines document for correct mark usage. |
+| Energy or grid usage data forwarded to analytics or advertising SDKs | **WARN** | Data obtained via EnergyKit may not be used for advertising or profiling. Declare any energy data collection in PrivacyInfo.xcprivacy (Attachment 11 §4). |
+| EnergyKit detected + entitlement present + attribution correct | ✅ PASS | EnergyKit usage compliant with Attachment 11 §4 |
+| No EnergyKit detected | ✅ N/A | Not applicable |
+
+---
+
+#### 8ao — Spam and Duplicate Apps (§4.3(a), §4.3(b))
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS, watchOS, tvOS — per §4.3, applies to all App Store submissions.
+
+The June 2026 revision clarified the basis for §4.3 and added examples. §4.3(a) covers duplicate submissions and multiple near-identical apps from one developer; §4.3(b) covers apps built from a common template or generation service in an already-saturated category.
+
+Detect: template, reskin, and clone markers across the project.
+
+- Parse `project.pbxproj` for multiple app targets whose only difference is branding (same source file set, different `PRODUCT_BUNDLE_IDENTIFIER` and asset catalog)
+- Flag bundle IDs differing only by a trailing numeral, region, or brand suffix: `com.x.app`, `com.x.app2`, `com.x.appFR`
+- Grep for reskin/whitelabel configuration files: `whitelabel`, `white_label`, `client_config`, `brand_config`, `reskin`, `partner_config`, `AppConfig.plist` with a brand switch
+- Grep `Info.plist` and asset catalogs for unreplaced template tokens: `YOUR_APP_NAME`, `{{APP_NAME}}`, `TemplateApp`, `AppTemplate`, `com.company.app`, `com.example.`
+- Grep for commercial app-generator SDK footprints in dependency manifests (`Package.resolved`, `Podfile.lock`) alongside a minimal first-party source tree
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Multiple app targets sharing an identical source set, differing only in bundle ID and branding assets | **CRITICAL** | Submitting near-identical apps that differ only in branding is a §4.3(a) rejection. Consolidate into a single app, using in-app content or configuration to serve the variants. |
+| Unreplaced template tokens (`YOUR_APP_NAME`, `com.example.`, `AppTemplate`) present in Info.plist or bundle ID | **CRITICAL** | Template placeholders indicate an unmodified generated app (§4.3(b)) and will also fail §2.1. Replace all template identifiers and branding before submission. |
+| Whitelabel/reskin configuration detected (brand switch driving app identity at build time) | **WARN** | Reskinned apps from a shared template are rejected under §4.3(b), particularly in saturated categories. Ensure each submission provides distinct functionality, not just distinct branding. |
+| Minimal first-party source with an app-generator SDK as the primary dependency | **WARN** | Apps created from a commercialized template or app generation service are rejected under §4.3(b). Submit from your own developer account with substantive original functionality. |
+| Single app target + original source + no template markers | ✅ PASS | No spam or duplicate app indicators (§4.3(a), §4.3(b)) |
+| No template or duplicate indicators detected | ✅ N/A | Not applicable |
+
+---
+
+#### 8ap — Kid and Teen Safety: Age Assurance (App Review Guidelines Introduction, §7.9)
+
+> **Platforms**: iOS, iPadOS, macOS, visionOS, watchOS, tvOS — applies to all platforms.
+
+The App Review Guidelines Introduction was revised with expanded kid and teen safety guidance, and DPLA §7.9 sets requirements for providing app information in App Store Connect and protecting end users who are minors. This check covers age assurance; content and API restrictions for the Kids category remain in check 8h.
+
+Detect: age assurance and minor-protection mechanisms.
+
+- Grep for the Declared Age Range API: `import DeclaredAgeRange`, `AgeRangeService`, `requestAgeRange`, `declaredAgeRange`
+- Grep for an existing age gate: `dateOfBirth`, `birthDate`, `ageVerification`, `parentalGate`, `isAdult`, `ageGate`, `over13`, `over18`
+- Grep for minor-relevant surfaces that require age assurance: chat/UGC (from check 8g), AI chatbot features (from Phase 8), advertising SDKs, in-app purchase, location sharing, public profiles
+- Check the app name, bundle ID, and App Store category for kid/teen signals (reuse the 8h indicator list)
+
+| Result | Severity | Finding |
+|--------|----------|---------|
+| Kid/teen-targeted app + open chat, UGC, or public profiles + no age assurance mechanism | **CRITICAL** | Apps available to minors that expose social features must implement age assurance and appropriate safety defaults per the revised App Review Guidelines Introduction and §7.9. |
+| Kid/teen-targeted app + advertising SDK or IAP + no age assurance mechanism | **CRITICAL** | Monetization surfaces shown to minors require an age assurance mechanism and a parental gate for purchase flows (Introduction, §7.9). |
+| AI chatbot or generative feature reachable by minors + no age assurance | **WARN** | Generative AI features available to minors require age assurance and content safeguards (Introduction, §7.9, §4.7.5). |
+| App may reach minors + no Declared Age Range integration and no in-app age gate | **WARN** | Adopt the Declared Age Range API or implement an in-app age gate so age-appropriate experiences can be applied (Introduction, §7.9). |
+| Age assurance implemented + age-appropriate defaults applied to social/monetization surfaces | ✅ PASS | Kid and teen safety requirements satisfied (Introduction, §7.9) |
+| App has no minor-reachable risk surfaces and is not kid/teen targeted | ✅ N/A | Not applicable |
+
+> Also confirm the App Store Connect age rating questionnaire (Phase 7) is answered consistently with what this check found — §7.9 requires accurate app information in App Store Connect.
 
 ---
 
@@ -1889,7 +2051,7 @@ Include a **Compliance Findings** section in the report with this table:
 | VPN entitlement | §5.4 | ... | [reason] |
 | MDM entitlement | §5.5 | ... | [reason] |
 | Medical app disclaimer | §1.4.1 | ... | [reason] |
-| Export compliance encryption | Before You Submit | ... | [reason] |
+| Export compliance and developer identity | §3.1 / §14.8 | ... | [reason] |
 | Private / deprecated API usage | §2.5.1 | ... | [reason] |
 | Loot box odds disclosure | §3.1.1 | ... | [reason] |
 | Facial recognition → LocalAuthentication | §2.5.13 | ... | [reason] |
@@ -1903,6 +2065,12 @@ Include a **Compliance Findings** section in the report with this table:
 | Customer Engagement APIs usage | §3.3.9(E) | ... | [reason] |
 | Live Activities: no spam/phishing | §4.5.3 | ... | [reason] |
 | Foundation Models license compliance | §3.3.11(A) | ... | [reason] |
+| Apple models access terms | §3.2(h) | ... | [reason] |
+| Accessibility content modification | §3.3.4(A) | ... | [reason] |
+| Passes privacy handling | Att. 5 §3.3 | ... | [reason] |
+| EnergyKit identity guidelines | Att. 11 §4 | ... | [reason] |
+| Spam / duplicate app risk | §4.3(a) / §4.3(b) | ... | [reason] |
+| Kid & teen safety age assurance | Intro / §7.9 | ... | [reason] |
 ```
 
 > Checks skipped due to platform not being targeted appear as `⏭ SKIPPED (platform not targeted)`. Include these rows only when the check was explicitly evaluated and skipped — omit checks that simply did not trigger (N/A).
@@ -1953,6 +2121,9 @@ Present each automated check result in checklist format:
 - [ ] App Review Notes filled in for any non-obvious flows (e.g., how to trigger a specific feature for review)
 - [ ] All in-app purchases are set up and approved in App Store Connect before submission
 - [ ] Export Compliance answered in App Store Connect (encryption usage declared)
+- [ ] Developer identity details in App Store Connect are current (legal entity name, address, trader status, D-U-N-S) and any information request from Apple about identity or export compliance is answered promptly (§3.1, §14.8)
+- [ ] App analytics reviewed via Xcode Organizer or the App Store Connect API before release (§6.7)
+- [ ] Indemnification terms in Section 10 of the Developer Program License Agreement reviewed by whoever signs the agreement
 ```
 
 ---

@@ -78,7 +78,7 @@ Firebase (Analytics, Auth, Crashlytics, Firestore, Storage, Messaging, Remote Co
 Adjust, AppsFlyer, Branch, Singular, Kochava
 
 ### Platform Frameworks
-HealthKit, CoreLocation, Contacts, ARKit, RealityKit, AVFoundation, PhotosUI, Speech, LocalAuthentication, UserNotifications, PassKit, AdSupport, AppTrackingTransparency, CloudKit, CoreData, SwiftData, SensitiveContentAnalysis, ActivityKit, CoreMediaIO
+HealthKit, CoreLocation, Contacts, ARKit, RealityKit, AVFoundation, PhotosUI, Speech, LocalAuthentication, UserNotifications, PassKit, AdSupport, AppTrackingTransparency, CloudKit, CoreData, SwiftData, SensitiveContentAnalysis, ActivityKit, CoreMediaIO, EnergyKit, DeclaredAgeRange
 
 ### AI & Machine Learning
 Apple Intelligence (Foundation Models, Writing Tools, Image Playground), OpenAI (GPT-4 / GPT-4o), Google Gemini (free tier), Firebase AI / Gemini (paid tier, formerly Vertex AI for Firebase), Anthropic Claude, Mistral, Groq, Cohere, Perplexity, CoreML, NaturalLanguage
@@ -91,7 +91,7 @@ tvOS: TVUserManager, TVTopShelfContentProvider
 
 ## App Store Compliance Checks
 
-Beyond privacy declarations, the skill also runs 37 pre-submission checks:
+Beyond privacy declarations, the skill also runs 42 pre-submission checks:
 
 | Check | Guideline | What It Verifies |
 |-------|-----------|-----------------|
@@ -121,7 +121,7 @@ Beyond privacy declarations, the skill also runs 37 pre-submission checks:
 | VPN entitlement | §5.4 | NetworkExtension → Apple-approved entitlement |
 | MDM entitlement | §5.5 | MDM restricted to enterprise/educational use |
 | Medical app disclaimer | §1.4.1 | HealthKit/medical terms → consult-doctor disclaimer |
-| Export compliance encryption | Before You Submit | ITSAppUsesNonExemptEncryption in Info.plist |
+| Export compliance and developer identity | §3.1 / §14.8 | ITSAppUsesNonExemptEncryption must match detected cryptography |
 | Private / deprecated API usage | §2.5.1 | No private frameworks, UIWebView, UIAlertView |
 | Loot box odds disclosure | §3.1.1 | Randomized IAP → odds must be disclosed |
 | Facial recognition → LocalAuthentication | §2.5.13 | ARKit face tracking + auth → use LocalAuthentication |
@@ -135,6 +135,12 @@ Beyond privacy declarations, the skill also runs 37 pre-submission checks:
 | Customer Engagement APIs | §3.3.9(E) | Engagement APIs for existing customers only |
 | Live Activities: no spam/phishing | §4.5.3 | Live Activities must not contain promotional/spam content |
 | Foundation Models license compliance | §3.3.11(A) | Foundation Models outputs not falsely attributed to humans |
+| Apple models access terms | §3.2(h) | Apple model output not used to train or improve another model |
+| Accessibility content modification | §3.3.4(A) | Dynamic Type, VoiceOver, and appearance settings not blocked |
+| Passes privacy handling | Att. 5 §3.3 | Wallet pass data not shared with third parties |
+| EnergyKit identity guidelines | Att. 11 §4 | EnergyKit entitlement + correct Apple attribution |
+| Spam / duplicate apps | §4.3(a) / §4.3(b) | No clone targets, reskins, or template placeholders |
+| Kid & teen safety age assurance | Intro / §7.9 | Age assurance for minor-reachable social and paid features |
 
 ## AI Privacy Features
 
